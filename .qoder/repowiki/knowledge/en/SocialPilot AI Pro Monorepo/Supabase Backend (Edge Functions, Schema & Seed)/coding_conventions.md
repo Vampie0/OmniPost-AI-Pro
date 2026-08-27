@@ -1,0 +1,6 @@
+- Each Edge Function wraps its handler in try/catch and returns a JSON `{ error }` response with appropriate HTTP status codes (401, 400, 500).
+- CORS is handled uniformly by defining a shared `corsHeaders` object and responding to OPTIONS requests with a plain 'ok' body.
+- Authentication is enforced by constructing a Supabase client with the incoming `Authorization` header and calling `auth.getUser()` before any business logic.
+- Database access uses the typed Supabase JS client against the `public` schema, with row-level security policies enforcing per-user scoping via `auth.uid()`.
+- External AI providers are gated behind optional environment variables so functions degrade gracefully to mock/fallback outputs when keys are unset.
+- Credit usage is recorded by invoking the `decrement_user_credits` RPC after each successful generation, separating side effects from the primary API response.

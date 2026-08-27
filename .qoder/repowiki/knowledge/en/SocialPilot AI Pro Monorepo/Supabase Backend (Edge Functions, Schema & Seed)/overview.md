@@ -1,0 +1,1 @@
+Supabase project defining the PostgreSQL schema with RLS policies, two Deno Edge Functions for AI content and image generation, and seed data for SocialPilot AI Pro.

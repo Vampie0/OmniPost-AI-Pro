@@ -1,0 +1,33 @@
+# Dependencies
+node_modules
+.pnpm-store
+
+# Production builds
+dist
+.next
+out
+build
+
+# Expo & React Native
+.expo/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+
+# Turborepo & Cache
+.turbo
+.cache
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# OS Files
+.DS_Store
+Thumbs.db

@@ -1,0 +1,1 @@
+Supabase (PostgreSQL + Edge Runtime), Deno std HTTP server for Edge Functions, @supabase/supabase-js v2, Google Gemini API (gemini-1.5-pro) for text generation, Replicate (SDXL model) for image generation, plpgsql triggers/functions for RLS and profile provisioning.

@@ -1,0 +1,1 @@
+Monorepo orchestrating the Supabase backend, Next.js admin and mobile apps, and shared packages via pnpm workspaces and Turborepo for unified build, dev, and lint workflows.

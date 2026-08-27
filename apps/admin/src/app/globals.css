@@ -1,0 +1,95 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --radius: 0.75rem;
+
+  /* ── Semantic status colors (mode-adaptive, overridden by ThemeProvider) ── */
+  --color-success: #059669;
+  --color-success-10: rgba(5, 150, 105, 0.1);
+  --color-success-20: rgba(5, 150, 105, 0.2);
+  --color-success-30: rgba(5, 150, 105, 0.3);
+
+  --color-warning: #D97706;
+  --color-warning-10: rgba(217, 119, 6, 0.1);
+  --color-warning-20: rgba(217, 119, 6, 0.2);
+  --color-warning-30: rgba(217, 119, 6, 0.3);
+
+  --color-danger: #E11D48;
+  --color-danger-10: rgba(225, 29, 72, 0.1);
+  --color-danger-20: rgba(225, 29, 72, 0.2);
+  --color-danger-30: rgba(225, 29, 72, 0.3);
+  --color-danger-80: rgba(225, 29, 72, 0.8);
+}
+
+/* Dark mode status colors (brighter for dark backgrounds) */
+.dark {
+  --color-success: #00F5A0;
+  --color-success-10: rgba(0, 245, 160, 0.1);
+  --color-success-20: rgba(0, 245, 160, 0.2);
+  --color-success-30: rgba(0, 245, 160, 0.3);
+
+  --color-warning: #FFAE00;
+  --color-warning-10: rgba(255, 174, 0, 0.1);
+  --color-warning-20: rgba(255, 174, 0, 0.2);
+  --color-warning-30: rgba(255, 174, 0, 0.3);
+
+  --color-danger: #FF385C;
+  --color-danger-10: rgba(255, 56, 92, 0.1);
+  --color-danger-20: rgba(255, 56, 92, 0.2);
+  --color-danger-30: rgba(255, 56, 92, 0.3);
+  --color-danger-80: rgba(255, 56, 92, 0.8);
+}
+
+/* Alpha variants — derived from theme CSS vars via color-mix (works with any palette) */
+:root,
+.dark {
+  --color-primary-10: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  --color-border-active-30: color-mix(in srgb, var(--color-border-active) 30%, transparent);
+  --color-border-active-50: color-mix(in srgb, var(--color-border-active) 50%, transparent);
+  --color-surface-subtle-30: color-mix(in srgb, var(--color-surface-subtle) 30%, transparent);
+  --color-surface-subtle-50: color-mix(in srgb, var(--color-surface-subtle) 50%, transparent);
+  --color-surface-subtle-60: color-mix(in srgb, var(--color-surface-subtle) 60%, transparent);
+  --color-glow-30: color-mix(in srgb, var(--color-glow) 30%, transparent);
+}
+
+body {
+  background-color: var(--color-bg, #FAFAFA);
+  color: var(--color-text-primary, #09090B);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", system-ui, sans-serif;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Selection highlight — uses palette primary */
+::selection {
+  background-color: var(--color-glow, #FF5E3A);
+  color: var(--color-btn-text, #FFFFFF);
+}
+
+/* Thin scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--color-border, rgba(0,0,0,0.08));
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-border-active, #FF5E3A);
+}
+
+/* Reusable Glassmorphism Utilities */
+@layer components {
+  .glass-panel {
+    background-color: var(--color-card-glass, rgba(255, 255, 255, 0.9));
+    border: 1px solid var(--color-card-glass-border, rgba(0, 0, 0, 0.06));
+    backdrop-filter: blur(24px);
+  }
+
+  .glass-card {
+    background-color: var(--color-card-glass, rgba(255, 255, 255, 0.9));
+    border: 1px solid var(--color-border, rgba(0, 0, 0, 0.08));
+    border-radius: 2rem;
+    backdrop-filter: blur(24px);
+  }
+}

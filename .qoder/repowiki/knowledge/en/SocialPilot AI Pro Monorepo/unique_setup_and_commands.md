@@ -1,0 +1,1 @@
+`pnpm dev` boots all workspace apps concurrently via Turborepo; `pnpm build` runs upstream-dependent builds across apps and packages; `pnpm admin` starts the Next.js admin app on port 3001 directly.

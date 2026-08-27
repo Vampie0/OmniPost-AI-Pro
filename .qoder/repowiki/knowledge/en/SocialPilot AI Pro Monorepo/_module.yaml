@@ -1,0 +1,24 @@
+schema_version: 1
+module_path: ""
+title: SocialPilot AI Pro Monorepo
+scope:
+    - README.md
+    - ADMIN_GUIDE.md
+    - CHANGELOG_AI.md
+    - INSTALLATION.md
+    - MOBILE_CUSTOMIZATION.md
+    - PROJECT_EXPORT_MASTER.txt
+    - PROJECT_STATE.md
+    - TROUBLESHOOTING.md
+    - .gitignore
+    - .npmrc
+    - package.json
+    - pnpm-lock.yaml
+    - pnpm-workspace.yaml
+    - scaffold-monorepo.cjs
+    - tsconfig.base.json
+    - tsconfig.json
+    - turbo.json
+source_files: []
+depends_on: []
+related_to: []

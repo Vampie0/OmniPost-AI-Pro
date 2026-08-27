@@ -1,0 +1,3 @@
+- Workspace packages live under `apps/` and `packages/` and are discovered automatically by pnpm's workspace config.
+- All TypeScript projects extend the root `tsconfig.base.json` to enforce identical strict compiler settings.
+- Turborepo pipeline tasks are defined centrally in `turbo.json` rather than per-package, with caching scoped to `.next` and `dist` output directories.

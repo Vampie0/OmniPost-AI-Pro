@@ -1,0 +1,1 @@
+pnpm workspaces + Turborepo v2 for task orchestration; TypeScript 5 with a shared strict `tsconfig.base.json`; Next.js apps producing `.next` artifacts; Deno-based Supabase Edge Functions in the backend workspace.

@@ -1,0 +1,1 @@
+Requires Supabase CLI to run migrations (`supabase db push`) and deploy Edge Functions (`supabase functions deploy`). Edge Functions need secrets configured in Supabase dashboard: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `GEMINI_API_KEY`, and `REPLICATE_API_TOKEN`. The `decrement_user_credits` stored procedure must exist in the database before deploying the functions.
