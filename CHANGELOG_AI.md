@@ -32,3 +32,15 @@
 ### Phase 15: Marketplace Packaging
 - One-command automated setup wizard (`scripts/setup-all.cjs`).
 - Complete documentation guides (`INSTALLATION.md`, `ADMIN_GUIDE.md`, `MOBILE_CUSTOMIZATION.md`, `TROUBLESHOOTING.md`).
+
+### Phase 16: Backend Sync Audit & Production Hardening
+- Full end-to-end audit: every mobile/admin data call verified against Supabase tables, edge functions, storage, and env keys (0 TypeScript errors in both apps).
+- New idempotent convergence migration `20240001000003_backend_sync.sql`: `ai_logs` table + owner RLS, `team_invites` table with per-inviter partial unique index, `decrement_user_credits` RPC now records daily analytics.
+- Edge function `generate-content` writes `ai_logs` entries after each credit-charged generation (History vault reads real data).
+- Post editor: full save/publish/delete write verification, real ISO `scheduled_at` persistence, loading/not-found states, and 401/402/403 edge-function error handling with paywall routing.
+- Paywall now persists real subscriptions (`subscriptions` row + profile tier) instead of only simulating success; payment UX remains simulated by design (no PSP wired).
+- Real clipboard via `expo-clipboard` in Content Studio and History vault.
+- Avatar uploads: orphaned storage objects removed on replace/delete, MIME-derived file extensions.
+- Auth store: per-user realtime profile channel with proper teardown on sign-out; admin analytics numbers gated behind demo mode with computed platform share.
+- Dead code removed (31 unused declarations, 16 empty folders, unused scaffold script).
+
