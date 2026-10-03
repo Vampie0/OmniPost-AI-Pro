@@ -28,6 +28,8 @@ export const LuminousOrbLoader: React.FC<LuminousOrbLoaderProps> = ({ size = 24 
   }, []);
 
   // Scale + Opacity layers simulating web CSS blur()
+  // Perf: 3 layers instead of 4 — the removed 1.15-scale layer sat visually
+  // between the 1.35 and 1.0 falloff steps and is imperceptible without it.
   const layer1Style = useAnimatedStyle(() => {
     'worklet';
     return {
@@ -45,14 +47,6 @@ export const LuminousOrbLoader: React.FC<LuminousOrbLoaderProps> = ({ size = 24 
   });
 
   const layer3Style = useAnimatedStyle(() => {
-    'worklet';
-    return {
-      transform: [{ rotate: `${spin.value}deg` }, { scale: 1.15 }],
-      opacity: 0.8,
-    };
-  });
-
-  const layer4Style = useAnimatedStyle(() => {
     'worklet';
     return {
       transform: [{ rotate: `${spin.value}deg` }, { scale: 1.0 }],
@@ -110,7 +104,7 @@ export const LuminousOrbLoader: React.FC<LuminousOrbLoaderProps> = ({ size = 24 
         />
       </Animated.View>
 
-      {/* Layer 3: Blur ~10px equivalent (scale 1.15, opacity 0.8) */}
+      {/* Layer 3: Core disc (scale 1.0, opacity 1.0) */}
       <Animated.View
         style={[
           styles.glowLayer,
@@ -120,26 +114,6 @@ export const LuminousOrbLoader: React.FC<LuminousOrbLoaderProps> = ({ size = 24 
             borderRadius: size / 2,
           },
           layer3Style,
-        ]}
-      >
-        <LinearGradient
-          colors={gradientColors}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[StyleSheet.absoluteFill, { borderRadius: size / 2 }]}
-        />
-      </Animated.View>
-
-      {/* Layer 4: Blur ~5px equivalent (scale 1.0, opacity 1.0) */}
-      <Animated.View
-        style={[
-          styles.glowLayer,
-          {
-            width: size,
-            height: size,
-            borderRadius: size / 2,
-          },
-          layer4Style,
         ]}
       >
         <LinearGradient

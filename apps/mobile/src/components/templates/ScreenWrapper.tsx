@@ -4,16 +4,19 @@ import {
   StatusBar,
   ScrollView,
   ViewStyle,
-  Dimensions,
   View,
   Keyboard,
   Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme/ThemeProvider';
-import { LinearGradient } from 'expo-linear-gradient';
-
-const { width, height } = Dimensions.get('window');
+import { AmbientBackdrop } from '@/components/atoms/AmbientBackdrop';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  Easing,
+} from 'react-native-reanimated';
 
 interface ScreenWrapperProps {
   children: React.ReactNode;
@@ -35,6 +38,23 @@ export const ScreenWrapper: React.FC<ScreenWrapperProps> = memo(({
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const [keyboardSpace, setKeyboardSpace] = useState(0);
+
+  /**
+   * Every screen mounts with the same short rise-and-fade. Doing it here rather
+   * than per screen means the 21 screens that had no entrance animation at all
+   * get one for free, and the ones that stagger their own sections still work —
+   * their inner timings run inside this outer fade.
+   */
+  const enter = useSharedValue(0);
+
+  useEffect(() => {
+    enter.value = withTiming(1, { duration: 420, easing: Easing.out(Easing.cubic) });
+  }, []);
+
+  const enterStyle = useAnimatedStyle(() => ({
+    opacity: enter.value,
+    transform: [{ translateY: (1 - enter.value) * 14 }],
+  }));
 
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
@@ -67,35 +87,34 @@ export const ScreenWrapper: React.FC<ScreenWrapperProps> = memo(({
         translucent
       />
 
-      {/* Top Ambient Glow */}
-      <LinearGradient
-        colors={[
-          theme.isDark ? `${theme.colors.glowColor}22` : `${theme.colors.glowColor}12`,
-          'transparent',
-        ]}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-        style={styles.topRadialGlow}
-        pointerEvents="none"
+      {/* Drifting palette wash — replaces the single static glow every screen shared */}
+      <AmbientBackdrop
+        glowColor={theme.colors.glowColor}
+        secondaryColor={theme.colors.secondaryGradient[0]}
+        isDark={theme.isDark}
       />
 
-      {scrollable ? (
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="none"
-          contentContainerStyle={[
-            styles.scrollContent,
-            {
-              paddingBottom: keyboardSpace > 0 ? keyboardSpace + 24 : insets.bottom + 24,
-            },
-            contentContainerStyle,
-          ]}
-        >
-          {children}
-        </ScrollView>
+{scrollable ? (
+        <Animated.View style={[styles.contentLayer, enterStyle]}>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="none"
+            contentContainerStyle={[
+              styles.scrollContent,
+              contentContainerStyle,
+              {
+                paddingBottom: keyboardSpace > 0 ? keyboardSpace + 24 : insets.bottom + 24,
+              },
+            ]}
+          >
+            {children}
+          </ScrollView>
+        </Animated.View>
       ) : (
-        <View style={styles.nonScrollContent}>{children}</View>
+        <Animated.View style={[styles.nonScrollContent, enterStyle]}>
+          {children}
+        </Animated.View>
       )}
     </View>
   );
@@ -112,14 +131,10 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
   },
-  nonScrollContent: {
+  contentLayer: {
     flex: 1,
   },
-  topRadialGlow: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: height * 0.45,
+  nonScrollContent: {
+    flex: 1,
   },
 });

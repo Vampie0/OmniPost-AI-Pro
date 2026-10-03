@@ -5,6 +5,7 @@ import { CosmicSocialLoader } from '@/components/atoms/CosmicSocialLoader';
 import { LinearGradient } from 'expo-linear-gradient';
 import { APP_BRANDING } from '@/constants';
 import { useConfigStore } from '@/store/useConfigStore';
+import { useTheme } from '@/theme/ThemeProvider';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -22,18 +23,19 @@ export const AnimatedSplashScreen: React.FC<AnimatedSplashScreenProps> = ({ onFi
   const insets = useSafeAreaInsets();
   const opacity = useSharedValue(1);
   const appConfig = useConfigStore((state) => state.config);
+  const { theme } = useTheme();
 
   const appName = appConfig?.app_name || APP_BRANDING.appName;
   const tagline = APP_BRANDING.tagline;
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      opacity.value = withTiming(0, { duration: 450 }, (finished) => {
+      opacity.value = withTiming(0, { duration: 520 }, (finished) => {
         if (finished) {
           runOnJS(onFinish)();
         }
       });
-    }, 2400);
+    }, 3600);
 
     return () => clearTimeout(timer);
   }, []);
@@ -49,34 +51,59 @@ export const AnimatedSplashScreen: React.FC<AnimatedSplashScreenProps> = ({ onFi
     <Animated.View
       style={[
         styles.container,
-        { backgroundColor: '#07080B' },
+        { backgroundColor: theme.colors.background },
         animatedContainer,
       ]}
     >
-      {/* Top Subtle Silver Mesh Glow */}
-      <LinearGradient
-        colors={['rgba(255, 255, 255, 0.08)', 'transparent']}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-        style={styles.topGlow}
-        pointerEvents="none"
-      />
+      {/* Top Ambient Mesh Glow — tinted by the active palette */}
+      <View style={styles.topGlow} pointerEvents="none">
+        <LinearGradient
+          colors={[`${theme.colors.glowColor}26`, 'transparent']}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+      </View>
 
       {/* 100% Dead-Center 3D Celestial Galaxy */}
       <View style={styles.centerContent}>
         <CosmicSocialLoader />
 
         <View style={styles.textGroup}>
-          <Text style={styles.brandTitle}>{appName}</Text>
-          <Text style={styles.brandTagline}>{tagline}</Text>
+          <View style={styles.brandTitleRow}>
+            <Text style={[styles.brandTitle, { color: theme.colors.textPrimary }]}>{appName}</Text>
+            <View
+              style={[
+                styles.enterpriseBadge,
+                {
+                  backgroundColor: theme.colors.badgeBg,
+                  borderColor: theme.colors.badgeBorder,
+                },
+              ]}
+            >
+              <Text style={[styles.enterpriseText, { color: theme.colors.badgeText }]}>
+                ENTERPRISE
+              </Text>
+            </View>
+          </View>
+          <Text style={[styles.brandTagline, { color: theme.colors.textSecondary }]}>
+            {tagline}
+          </Text>
         </View>
       </View>
 
       {/* Bottom Status Tag */}
       <View style={[styles.bottomStatus, { paddingBottom: insets.bottom + 24 }]}>
-        <View style={styles.statusPill}>
-          <View style={styles.pulseDot} />
-          <Text style={styles.statusText}>INITIALIZING CELESTIAL ENGINE...</Text>
+        <View
+          style={[
+            styles.statusPill,
+            { borderColor: theme.colors.border, backgroundColor: theme.colors.surface },
+          ]}
+        >
+          <View style={[styles.pulseDot, { backgroundColor: theme.colors.primary }]} />
+          <Text style={[styles.statusText, { color: theme.colors.textPrimary }]}>
+            INITIALIZING CELESTIAL ENGINE...
+          </Text>
         </View>
       </View>
     </Animated.View>
@@ -85,12 +112,15 @@ export const AnimatedSplashScreen: React.FC<AnimatedSplashScreenProps> = ({ onFi
 
 const styles = StyleSheet.create({
   container: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 999999,
     width,
     height,
     alignItems: 'center',
     justifyContent: 'center',
+    // The orrery is tall enough that a centred column pushes the wordmark into
+    // the absolutely-positioned status pill without this clearance.
+    paddingBottom: 150,
   },
   topGlow: {
     position: 'absolute',
@@ -107,16 +137,30 @@ const styles = StyleSheet.create({
   },
   textGroup: {
     alignItems: 'center',
-    marginTop: 22,
+    marginTop: 6,
+  },
+  brandTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   brandTitle: {
-    color: '#FFFFFF',
     fontSize: 27,
     fontWeight: '900',
     letterSpacing: -0.5,
   },
+  enterpriseBadge: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  enterpriseText: {
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+  },
   brandTagline: {
-    color: '#94A3B8',
     fontSize: 13,
     fontWeight: '500',
     letterSpacing: 0.2,
@@ -136,18 +180,14 @@ const styles = StyleSheet.create({
     paddingVertical: 5.5,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
-    backgroundColor: 'rgba(15, 23, 42, 0.6)',
     gap: 7,
   },
   pulseDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#38BDF8',
   },
   statusText: {
-    color: '#E2E8F0',
     fontSize: 10.5,
     fontWeight: '800',
     letterSpacing: 0.8,
