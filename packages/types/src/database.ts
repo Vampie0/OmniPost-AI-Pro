@@ -122,3 +122,12 @@ export interface AnalyticsMetric {
   credits_used: number;
   date: string;
 }
+
+export interface AILog {
+  id: string;
+  user_id: string;
+  prompt: string;
+  response: string;
+  tokens_used: number;
+  created_at: string;
+}

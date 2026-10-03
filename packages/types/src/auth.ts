@@ -12,6 +12,7 @@ export interface UserProfile {
   credits_remaining: number;
   credits_limit: number;
   is_suspended: boolean;
+  suspension_reason?: string | null;
   onboarding_completed: boolean;
   created_at: string;
   updated_at: string;

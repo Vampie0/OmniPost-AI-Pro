@@ -1,6 +1,15 @@
 -- ==============================================================================
--- SocialPilot AI Pro — Complete Database Schema, Security & Realtime Definition
--- Master Migration v3.5 — Zero-Config Ready
+-- SocialPilot AI Pro — SUPABASE SETUP SCRIPT
+-- ==============================================================================
+-- HOW TO USE:
+--   1. Open your Supabase Dashboard → SQL Editor (left sidebar)
+--   2. Click "New Query"
+--   3. Copy-paste this ENTIRE script
+--   4. Click "Run" (or press Ctrl+Enter)
+--
+-- This script is IDEMPOTENT — safe to run multiple times.
+-- It creates all tables, RLS policies, triggers, and backfills
+-- profiles for any existing auth.users.
 -- ==============================================================================
 
 -- Enable UUID extension
@@ -31,7 +40,7 @@ DO $$ BEGIN
 END $$;
 
 -- ==============================================================================
--- 2. APP CONFIG (Single-Row White-Label Settings)
+-- 2. APP CONFIG (White-Label Settings)
 -- ==============================================================================
 CREATE TABLE IF NOT EXISTS public.app_config (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -47,8 +56,13 @@ CREATE TABLE IF NOT EXISTS public.app_config (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Seed default app_config if empty
+INSERT INTO public.app_config (app_name)
+SELECT 'SocialPilot AI'
+WHERE NOT EXISTS (SELECT 1 FROM public.app_config LIMIT 1);
+
 -- ==============================================================================
--- 3. AI CONFIG (Single-Row Centralized AI Settings)
+-- 3. AI CONFIG
 -- ==============================================================================
 CREATE TABLE IF NOT EXISTS public.ai_config (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -63,8 +77,13 @@ CREATE TABLE IF NOT EXISTS public.ai_config (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Seed default ai_config if empty
+INSERT INTO public.ai_config (text_provider, text_model)
+SELECT 'gemini', 'gemini-2.0-flash'
+WHERE NOT EXISTS (SELECT 1 FROM public.ai_config LIMIT 1);
+
 -- ==============================================================================
--- 4. USER PROFILES
+-- 4. USER PROFILES (the table you need to see & manage users)
 -- ==============================================================================
 CREATE TABLE IF NOT EXISTS public.profiles (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -127,14 +146,6 @@ BEGIN
   IF new_balance IS NULL THEN
     RAISE EXCEPTION 'Insufficient credits or user suspended';
   END IF;
-
-  -- Record in analytics
-  INSERT INTO public.analytics (user_id, total_ai_generations, credits_used)
-  VALUES (user_id_param, 1, amount)
-  ON CONFLICT (user_id, date)
-  DO UPDATE SET
-    total_ai_generations = public.analytics.total_ai_generations + 1,
-    credits_used = public.analytics.credits_used + amount;
 
   RETURN new_balance;
 END;
@@ -231,7 +242,7 @@ CREATE TABLE IF NOT EXISTS public.notifications (
 );
 
 -- ==============================================================================
--- 13. AI LOGS (Per-User Generation Audit Trail)
+-- 13. AI LOGS
 -- ==============================================================================
 CREATE TABLE IF NOT EXISTS public.ai_logs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -256,7 +267,7 @@ CREATE TABLE IF NOT EXISTS public.admin_audit_logs (
 );
 
 -- ==============================================================================
--- ROW LEVEL SECURITY (RLS) — BULLETPROFT POLICIES
+-- 15. ROW LEVEL SECURITY (RLS) — Enable on ALL tables
 -- ==============================================================================
 
 ALTER TABLE public.app_config ENABLE ROW LEVEL SECURITY;
@@ -269,8 +280,27 @@ ALTER TABLE public.templates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.generated_images ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.analytics ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.admin_audit_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.admin_audit_logs ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies first (safe for re-runs)
+DO $$
+DECLARE
+  pol RECORD;
+  tbl TEXT[] := ARRAY[
+    'app_config', 'ai_config', 'profiles', 'subscriptions',
+    'folders', 'posts', 'templates', 'generated_images',
+    'analytics', 'notifications', 'ai_logs', 'admin_audit_logs'
+  ];
+BEGIN
+  FOR pol IN
+    SELECT schemaname, tablename, policyname
+    FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = ANY(tbl)
+  LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', pol.policyname, pol.tablename::TEXT);
+  END LOOP;
+END $$;
 
 -- App Config: Public read for all authenticated, write restricted to admins
 CREATE POLICY "app_config_select_authenticated" ON public.app_config
@@ -280,7 +310,7 @@ CREATE POLICY "app_config_update_admin" ON public.app_config
 CREATE POLICY "app_config_insert_admin" ON public.app_config
     FOR INSERT TO authenticated WITH CHECK (public.is_admin());
 
--- AI Config: Authenticated can read model names, admins full write
+-- AI Config: Authenticated can read, admins full write
 CREATE POLICY "ai_config_select_authenticated" ON public.ai_config
     FOR SELECT TO authenticated USING (true);
 CREATE POLICY "ai_config_all_admin" ON public.ai_config
@@ -302,7 +332,7 @@ CREATE POLICY "subscriptions_select_own_or_admin" ON public.subscriptions
 CREATE POLICY "subscriptions_admin_write" ON public.subscriptions
     FOR ALL TO authenticated USING (public.is_admin());
 
--- Posts: Strictly isolated per user_id. Admins have moderation read-only / soft-delete rights
+-- Posts: Strictly isolated per user_id. Admins have moderation/delete rights
 CREATE POLICY "posts_user_own" ON public.posts
     FOR ALL TO authenticated USING (auth.uid() = user_id);
 CREATE POLICY "posts_admin_moderate" ON public.posts
@@ -347,7 +377,7 @@ CREATE POLICY "admin_audit_logs_admin_only" ON public.admin_audit_logs
     FOR ALL TO authenticated USING (public.is_admin());
 
 -- ==============================================================================
--- AUTOMATIC PROFILE TRIGGER ON AUTH SIGNUP
+-- 16. AUTOMATIC PROFILE TRIGGER ON AUTH SIGNUP
 -- ==============================================================================
 
 CREATE OR REPLACE FUNCTION public.handle_new_user()
@@ -372,35 +402,14 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- Drop trigger if exists (safe for re-runs), then recreate
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-CREATE OR REPLACE TRIGGER on_auth_user_created
+CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
 -- ==============================================================================
--- BACKFILL: Create profiles for existing auth.users without one
--- ==============================================================================
-INSERT INTO public.profiles (id, email, full_name, avatar_url, role)
-SELECT
-  u.id,
-  u.email,
-  COALESCE(u.raw_user_meta_data->>'full_name', u.raw_user_meta_data->>'name', split_part(u.email, '@', 1)),
-  u.raw_user_meta_data->>'avatar_url',
-  COALESCE((u.raw_user_meta_data->>'role')::user_role, 'user'::user_role)
-FROM auth.users u
-LEFT JOIN public.profiles p ON p.id = u.id
-WHERE p.id IS NULL
-  AND u.email IS NOT NULL;
-
--- Create free subscriptions for backfilled users
-INSERT INTO public.subscriptions (user_id, tier, status)
-SELECT p.id, 'free', 'active'
-FROM public.profiles p
-LEFT JOIN public.subscriptions s ON s.user_id = p.id
-WHERE s.id IS NULL;
-
--- ==============================================================================
--- AUTO-UPDATE updated_at TRIGGER
+-- 17. AUTO-UPDATE updated_at TRIGGER
 -- ==============================================================================
 
 CREATE OR REPLACE FUNCTION public.update_updated_at_column()
@@ -410,6 +419,13 @@ BEGIN
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+
+-- Drop and recreate triggers (safe for re-runs)
+DROP TRIGGER IF EXISTS set_updated_at ON public.app_config;
+DROP TRIGGER IF EXISTS set_updated_at ON public.ai_config;
+DROP TRIGGER IF EXISTS set_updated_at ON public.profiles;
+DROP TRIGGER IF EXISTS set_updated_at ON public.subscriptions;
+DROP TRIGGER IF EXISTS set_updated_at ON public.posts;
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.app_config
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
@@ -423,12 +439,90 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.posts
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ==============================================================================
--- REALTIME PUBLICATION
+-- 18. BACKFILL: Create profiles for existing auth.users without one
 -- ==============================================================================
 
-ALTER PUBLICATION supabase_realtime ADD TABLE public.app_config;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.templates;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.profiles;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.posts;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.ai_logs;
+INSERT INTO public.profiles (id, email, full_name, avatar_url, role)
+SELECT
+  u.id,
+  u.email,
+  COALESCE(u.raw_user_meta_data->>'full_name', u.raw_user_meta_data->>'name', split_part(u.email, '@', 1)),
+  u.raw_user_meta_data->>'avatar_url',
+  COALESCE((u.raw_user_meta_data->>'role')::user_role, 'user'::user_role)
+FROM auth.users u
+LEFT JOIN public.profiles p ON p.id = u.id
+WHERE p.id IS NULL
+  AND u.email IS NOT NULL;
+
+-- Also create free subscriptions for backfilled users
+INSERT INTO public.subscriptions (user_id, tier, status)
+SELECT p.id, 'free', 'active'
+FROM public.profiles p
+LEFT JOIN public.subscriptions s ON s.user_id = p.id
+WHERE s.id IS NULL;
+
+-- ==============================================================================
+-- 19. PROMOTE FIRST USER TO SUPER ADMIN (if any users exist)
+-- ==============================================================================
+-- If you already have an admin account in auth.users, uncomment the next line
+-- and replace with your email to promote yourself to super_admin:
+--
+-- UPDATE public.profiles SET role = 'super_admin' WHERE email = 'YOUR_EMAIL_HERE';
+--
+
+-- ==============================================================================
+-- 20. REALTIME PUBLICATION
+-- ==============================================================================
+
+-- Safely add tables to Realtime (skip if already added)
+DO $$
+BEGIN
+  -- app_config
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'app_config'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.app_config;
+  END IF;
+  -- templates
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'templates'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.templates;
+  END IF;
+  -- profiles
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'profiles'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.profiles;
+  END IF;
+  -- posts
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'posts'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.posts;
+  END IF;
+  -- notifications
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'notifications'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;
+  END IF;
+  -- ai_logs
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'ai_logs'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.ai_logs;
+  END IF;
+END $$;
+
+-- ==============================================================================
+-- DONE! Verify with:
+--   SELECT count(*) FROM public.profiles;
+--   SELECT id, email, role, subscription_tier, credits_remaining FROM public.profiles;
+-- ==============================================================================

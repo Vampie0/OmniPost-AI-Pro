@@ -1,6 +1,19 @@
 -- ==============================================================================
--- SocialPilot AI Pro — Complete Database Schema, Security & Realtime Definition
--- Master Migration v3.5 — Zero-Config Ready
+-- SocialPilot AI Pro — MASTER SUPABASE SETUP SCRIPT
+-- ==============================================================================
+-- HOW TO USE:
+--   1. Open your Supabase Dashboard -> SQL Editor (left sidebar)
+--   2. Click "New Query"
+--   3. Copy-paste this ENTIRE script
+--   4. Click "Run" (or press Ctrl+Enter)
+--
+-- This script is IDEMPOTENT — safe to run multiple times.
+-- It REPLACES setup-minimal.sql, setup.sql, and new-user-error.sql.
+-- It creates ALL tables, RLS policies, triggers, team invites,
+-- and backfills profiles for any existing auth.users.
+--
+-- SECURITY: All tables have RLS enabled. All policies enforce
+-- proper data isolation per user with admin override.
 -- ==============================================================================
 
 -- Enable UUID extension
@@ -28,10 +41,16 @@ DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'notification_type') THEN
     CREATE TYPE notification_type AS ENUM ('info', 'success', 'warning', 'error', 'promo', 'system');
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'invite_status') THEN
+    CREATE TYPE invite_status AS ENUM ('pending', 'accepted', 'declined', 'expired');
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'invite_role') THEN
+    CREATE TYPE invite_role AS ENUM ('editor', 'viewer');
+  END IF;
 END $$;
 
 -- ==============================================================================
--- 2. APP CONFIG (Single-Row White-Label Settings)
+-- 2. APP CONFIG (White-Label Settings)
 -- ==============================================================================
 CREATE TABLE IF NOT EXISTS public.app_config (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -47,8 +66,12 @@ CREATE TABLE IF NOT EXISTS public.app_config (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+INSERT INTO public.app_config (app_name)
+SELECT 'SocialPilot AI'
+WHERE NOT EXISTS (SELECT 1 FROM public.app_config LIMIT 1);
+
 -- ==============================================================================
--- 3. AI CONFIG (Single-Row Centralized AI Settings)
+-- 3. AI CONFIG
 -- ==============================================================================
 CREATE TABLE IF NOT EXISTS public.ai_config (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -62,6 +85,10 @@ CREATE TABLE IF NOT EXISTS public.ai_config (
     rate_limit_per_min INTEGER NOT NULL DEFAULT 20,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+INSERT INTO public.ai_config (text_provider, text_model)
+SELECT 'gemini', 'gemini-2.0-flash'
+WHERE NOT EXISTS (SELECT 1 FROM public.ai_config LIMIT 1);
 
 -- ==============================================================================
 -- 4. USER PROFILES
@@ -96,7 +123,27 @@ CREATE TABLE IF NOT EXISTS public.subscriptions (
 );
 
 -- ==============================================================================
--- 6. HELPER FUNCTIONS
+-- 6. TEAM INVITES (new — supports invite workflow)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.team_invites (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    inviter_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    invitee_email TEXT NOT NULL,
+    invitee_name TEXT DEFAULT '',
+    role invite_role NOT NULL DEFAULT 'editor',
+    status invite_status NOT NULL DEFAULT 'pending',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Pending invites are unique PER INVITER (global email+status uniqueness broke
+-- multi-workspace invites and repeat accepts; see migration 20240001000003)
+CREATE UNIQUE INDEX IF NOT EXISTS unique_pending_invite_per_inviter
+    ON public.team_invites (inviter_id, invitee_email)
+    WHERE status = 'pending';
+
+-- ==============================================================================
+-- 7. HELPER FUNCTIONS
 -- ==============================================================================
 
 -- Check if current user is admin
@@ -110,7 +157,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Decrement user credits atomically (called by Edge Functions)
+-- Decrement user credits atomically
 CREATE OR REPLACE FUNCTION public.decrement_user_credits(user_id_param UUID, amount INTEGER)
 RETURNS INTEGER AS $$
 DECLARE
@@ -128,7 +175,7 @@ BEGIN
     RAISE EXCEPTION 'Insufficient credits or user suspended';
   END IF;
 
-  -- Record in analytics
+  -- Record in analytics (kept byte-identical with migrations/20240001000003)
   INSERT INTO public.analytics (user_id, total_ai_generations, credits_used)
   VALUES (user_id_param, 1, amount)
   ON CONFLICT (user_id, date)
@@ -141,7 +188,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- ==============================================================================
--- 7. FOLDERS
+-- 8. FOLDERS
 -- ==============================================================================
 CREATE TABLE IF NOT EXISTS public.folders (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -152,7 +199,7 @@ CREATE TABLE IF NOT EXISTS public.folders (
 );
 
 -- ==============================================================================
--- 8. POSTS
+-- 9. POSTS
 -- ==============================================================================
 CREATE TABLE IF NOT EXISTS public.posts (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -173,7 +220,7 @@ CREATE TABLE IF NOT EXISTS public.posts (
 );
 
 -- ==============================================================================
--- 9. TEMPLATES
+-- 10. TEMPLATES
 -- ==============================================================================
 CREATE TABLE IF NOT EXISTS public.templates (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -190,7 +237,7 @@ CREATE TABLE IF NOT EXISTS public.templates (
 );
 
 -- ==============================================================================
--- 10. GENERATED IMAGES
+-- 11. GENERATED IMAGES
 -- ==============================================================================
 CREATE TABLE IF NOT EXISTS public.generated_images (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -203,7 +250,7 @@ CREATE TABLE IF NOT EXISTS public.generated_images (
 );
 
 -- ==============================================================================
--- 11. ANALYTICS METRICS
+-- 12. ANALYTICS METRICS
 -- ==============================================================================
 CREATE TABLE IF NOT EXISTS public.analytics (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -217,7 +264,7 @@ CREATE TABLE IF NOT EXISTS public.analytics (
 );
 
 -- ==============================================================================
--- 12. NOTIFICATIONS
+-- 13. NOTIFICATIONS
 -- ==============================================================================
 CREATE TABLE IF NOT EXISTS public.notifications (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -231,7 +278,7 @@ CREATE TABLE IF NOT EXISTS public.notifications (
 );
 
 -- ==============================================================================
--- 13. AI LOGS (Per-User Generation Audit Trail)
+-- 14. AI LOGS
 -- ==============================================================================
 CREATE TABLE IF NOT EXISTS public.ai_logs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -243,7 +290,7 @@ CREATE TABLE IF NOT EXISTS public.ai_logs (
 );
 
 -- ==============================================================================
--- 14. ADMIN AUDIT LOGS
+-- 15. ADMIN AUDIT LOGS
 -- ==============================================================================
 CREATE TABLE IF NOT EXISTS public.admin_audit_logs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -256,23 +303,43 @@ CREATE TABLE IF NOT EXISTS public.admin_audit_logs (
 );
 
 -- ==============================================================================
--- ROW LEVEL SECURITY (RLS) — BULLETPROFT POLICIES
+-- 16. ROW LEVEL SECURITY (RLS) — Enable on ALL tables
 -- ==============================================================================
 
 ALTER TABLE public.app_config ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_config ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.subscriptions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.team_invites ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.folders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.posts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.templates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.generated_images ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.analytics ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.admin_audit_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.admin_audit_logs ENABLE ROW LEVEL SECURITY;
 
--- App Config: Public read for all authenticated, write restricted to admins
+-- Drop existing policies first (safe for re-runs)
+DO $$
+DECLARE
+  pol RECORD;
+  tbl TEXT[] := ARRAY[
+    'app_config', 'ai_config', 'profiles', 'subscriptions', 'team_invites',
+    'folders', 'posts', 'templates', 'generated_images',
+    'analytics', 'notifications', 'ai_logs', 'admin_audit_logs'
+  ];
+BEGIN
+  FOR pol IN
+    SELECT schemaname, tablename, policyname
+    FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = ANY(tbl)
+  LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', pol.policyname, pol.tablename::TEXT);
+  END LOOP;
+END $$;
+
+-- ── App Config: Public read, admin write ──
 CREATE POLICY "app_config_select_authenticated" ON public.app_config
     FOR SELECT TO authenticated USING (true);
 CREATE POLICY "app_config_update_admin" ON public.app_config
@@ -280,13 +347,13 @@ CREATE POLICY "app_config_update_admin" ON public.app_config
 CREATE POLICY "app_config_insert_admin" ON public.app_config
     FOR INSERT TO authenticated WITH CHECK (public.is_admin());
 
--- AI Config: Authenticated can read model names, admins full write
+-- ── AI Config: Authenticated read, admin full write ──
 CREATE POLICY "ai_config_select_authenticated" ON public.ai_config
     FOR SELECT TO authenticated USING (true);
 CREATE POLICY "ai_config_all_admin" ON public.ai_config
     FOR ALL TO authenticated USING (public.is_admin());
 
--- Profiles: Users read/update own only. Admins can read all and update roles/credits/suspension
+-- ── Profiles: Users read/update own. Admins can read/update all ──
 CREATE POLICY "profiles_select_own_or_admin" ON public.profiles
     FOR SELECT TO authenticated USING (auth.uid() = id OR public.is_admin());
 CREATE POLICY "profiles_update_own" ON public.profiles
@@ -296,13 +363,39 @@ CREATE POLICY "profiles_update_own" ON public.profiles
 CREATE POLICY "profiles_admin_full" ON public.profiles
     FOR ALL TO authenticated USING (public.is_admin());
 
--- Subscriptions: Users read own, admins read all
+-- ── Subscriptions: Users read own, admin full access ──
 CREATE POLICY "subscriptions_select_own_or_admin" ON public.subscriptions
     FOR SELECT TO authenticated USING (auth.uid() = user_id OR public.is_admin());
 CREATE POLICY "subscriptions_admin_write" ON public.subscriptions
     FOR ALL TO authenticated USING (public.is_admin());
+CREATE POLICY "subscriptions_insert_own" ON public.subscriptions
+    FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id);
 
--- Posts: Strictly isolated per user_id. Admins have moderation read-only / soft-delete rights
+-- ── Team Invites: Admins/inviter can see, invitee can see own, admin full write ──
+CREATE POLICY "team_invites_select_inviter_or_invitee" ON public.team_invites
+    FOR SELECT TO authenticated
+    USING (
+      inviter_id = auth.uid()
+      OR invitee_email = (SELECT email FROM public.profiles WHERE id = auth.uid())
+      OR public.is_admin()
+    );
+CREATE POLICY "team_invites_insert_any_authenticated" ON public.team_invites
+    FOR INSERT TO authenticated
+    WITH CHECK (auth.uid() = inviter_id);
+CREATE POLICY "team_invites_update_invitee_or_admin" ON public.team_invites
+    FOR UPDATE TO authenticated
+    USING (
+      invitee_email = (SELECT email FROM public.profiles WHERE id = auth.uid())
+      OR public.is_admin()
+    )
+    WITH CHECK (
+      invitee_email = (SELECT email FROM public.profiles WHERE id = auth.uid())
+      OR public.is_admin()
+    );
+CREATE POLICY "team_invites_delete_admin" ON public.team_invites
+    FOR DELETE TO authenticated USING (public.is_admin());
+
+-- ── Posts: User owns their posts, admin moderation ──
 CREATE POLICY "posts_user_own" ON public.posts
     FOR ALL TO authenticated USING (auth.uid() = user_id);
 CREATE POLICY "posts_admin_moderate" ON public.posts
@@ -310,27 +403,27 @@ CREATE POLICY "posts_admin_moderate" ON public.posts
 CREATE POLICY "posts_admin_delete" ON public.posts
     FOR DELETE TO authenticated USING (public.is_admin());
 
--- Folders: Users manage own only
+-- ── Folders: Users manage own only ──
 CREATE POLICY "folders_user_own" ON public.folders
     FOR ALL TO authenticated USING (auth.uid() = user_id);
 
--- Templates: Public read for active rows, write restricted to admins
+-- ── Templates: Public read active, admin write ──
 CREATE POLICY "templates_select_active" ON public.templates
     FOR SELECT TO authenticated USING (is_active = true OR public.is_admin());
 CREATE POLICY "templates_admin_write" ON public.templates
     FOR ALL TO authenticated USING (public.is_admin());
 
--- Generated Images: Users manage own
+-- ── Generated Images: Users manage own ──
 CREATE POLICY "generated_images_user_own" ON public.generated_images
     FOR ALL TO authenticated USING (auth.uid() = user_id);
 
--- Notifications: Users manage own, admins can insert for broadcast
+-- ── Notifications: Users manage own, admin broadcast insert ──
 CREATE POLICY "notifications_user_own" ON public.notifications
     FOR ALL TO authenticated USING (auth.uid() = user_id);
 CREATE POLICY "notifications_admin_insert" ON public.notifications
     FOR INSERT TO authenticated WITH CHECK (public.is_admin());
 
--- Analytics: Users read own, admins read all
+-- ── Analytics: Users read/insert own, admin read all ──
 CREATE POLICY "analytics_select_own_or_admin" ON public.analytics
     FOR SELECT TO authenticated USING (auth.uid() = user_id OR public.is_admin());
 CREATE POLICY "analytics_insert_own" ON public.analytics
@@ -338,69 +431,72 @@ CREATE POLICY "analytics_insert_own" ON public.analytics
 CREATE POLICY "analytics_update_own" ON public.analytics
     FOR UPDATE TO authenticated USING (auth.uid() = user_id);
 
--- AI Logs: Users read own only
+-- ── AI Logs: Users read own only ──
 CREATE POLICY "ai_logs_select_own" ON public.ai_logs
     FOR SELECT TO authenticated USING (auth.uid() = user_id);
 
--- Admin Audit Logs: Insertable and readable only by admins
+-- ── Admin Audit Logs: Admin only ──
 CREATE POLICY "admin_audit_logs_admin_only" ON public.admin_audit_logs
     FOR ALL TO authenticated USING (public.is_admin());
 
 -- ==============================================================================
--- AUTOMATIC PROFILE TRIGGER ON AUTH SIGNUP
+-- 17. AUTOMATIC PROFILE TRIGGER ON AUTH SIGNUP (hardened — kept identical
+--     with migrations/20240001000004_fix_profile_trigger.sql: profile errors
+--     propagate loudly; the subscription default runs in its own savepoint so
+--     it can never silently roll back the profile row)
 -- ==============================================================================
 
 CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_email TEXT := COALESCE(NEW.email, NEW.id::text || '@noemail.local');
+  v_name  TEXT := COALESCE(
+    NULLIF(NEW.raw_user_meta_data->>'full_name', ''),
+    split_part(COALESCE(NEW.email, ''), '@', 1),
+    'Creator'
+  );
+  v_role  user_role := CASE
+    WHEN NEW.raw_user_meta_data->>'role' IN ('user', 'admin', 'super_admin')
+      THEN (NEW.raw_user_meta_data->>'role')::user_role
+    ELSE 'user'::user_role
+  END;
 BEGIN
   INSERT INTO public.profiles (id, email, full_name, avatar_url, role)
   VALUES (
     NEW.id,
-    NEW.email,
-    NEW.raw_user_meta_data->>'full_name',
-    NEW.raw_user_meta_data->>'avatar_url',
-    COALESCE((NEW.raw_user_meta_data->>'role')::user_role, 'user'::user_role)
+    v_email,
+    v_name,
+    NULLIF(NEW.raw_user_meta_data->>'avatar_url', ''),
+    v_role
   )
-  ON CONFLICT (id) DO NOTHING;
+  ON CONFLICT (id) DO UPDATE SET
+    email     = EXCLUDED.email,
+    full_name = COALESCE(public.profiles.full_name, EXCLUDED.full_name);
 
-  -- Auto-create a free subscription for new users
-  INSERT INTO public.subscriptions (user_id, tier, status)
-  VALUES (NEW.id, 'free', 'active')
-  ON CONFLICT DO NOTHING;
+  BEGIN
+    IF NOT EXISTS (SELECT 1 FROM public.subscriptions s WHERE s.user_id = NEW.id) THEN
+      INSERT INTO public.subscriptions (user_id, tier, status)
+      VALUES (NEW.id, 'free', 'active');
+    END IF;
+  EXCEPTION WHEN OTHERS THEN
+    RAISE WARNING 'handle_new_user: subscription default skipped for %: %', NEW.id, SQLERRM;
+  END;
 
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$;
 
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-CREATE OR REPLACE TRIGGER on_auth_user_created
+CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
 -- ==============================================================================
--- BACKFILL: Create profiles for existing auth.users without one
--- ==============================================================================
-INSERT INTO public.profiles (id, email, full_name, avatar_url, role)
-SELECT
-  u.id,
-  u.email,
-  COALESCE(u.raw_user_meta_data->>'full_name', u.raw_user_meta_data->>'name', split_part(u.email, '@', 1)),
-  u.raw_user_meta_data->>'avatar_url',
-  COALESCE((u.raw_user_meta_data->>'role')::user_role, 'user'::user_role)
-FROM auth.users u
-LEFT JOIN public.profiles p ON p.id = u.id
-WHERE p.id IS NULL
-  AND u.email IS NOT NULL;
-
--- Create free subscriptions for backfilled users
-INSERT INTO public.subscriptions (user_id, tier, status)
-SELECT p.id, 'free', 'active'
-FROM public.profiles p
-LEFT JOIN public.subscriptions s ON s.user_id = p.id
-WHERE s.id IS NULL;
-
--- ==============================================================================
--- AUTO-UPDATE updated_at TRIGGER
+-- 18. AUTO-UPDATE updated_at TRIGGERS
 -- ==============================================================================
 
 CREATE OR REPLACE FUNCTION public.update_updated_at_column()
@@ -410,6 +506,13 @@ BEGIN
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS set_updated_at ON public.app_config;
+DROP TRIGGER IF EXISTS set_updated_at ON public.ai_config;
+DROP TRIGGER IF EXISTS set_updated_at ON public.profiles;
+DROP TRIGGER IF EXISTS set_updated_at ON public.subscriptions;
+DROP TRIGGER IF EXISTS set_updated_at ON public.posts;
+DROP TRIGGER IF EXISTS set_updated_at ON public.team_invites;
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.app_config
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
@@ -421,14 +524,129 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.subscriptions
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.posts
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.team_invites
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ==============================================================================
--- REALTIME PUBLICATION
+-- 19. BACKFILL: Create profiles for existing auth.users without one
 -- ==============================================================================
 
-ALTER PUBLICATION supabase_realtime ADD TABLE public.app_config;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.templates;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.profiles;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.posts;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.ai_logs;
+INSERT INTO public.profiles (id, email, full_name, avatar_url, role)
+SELECT
+  u.id,
+  COALESCE(u.email, 'unknown@placeholder.com'),
+  COALESCE(u.raw_user_meta_data->>'full_name', u.raw_user_meta_data->>'name', split_part(COALESCE(u.email, ''), '@', 1)),
+  COALESCE(u.raw_user_meta_data->>'avatar_url', ''),
+  COALESCE((u.raw_user_meta_data->>'role')::user_role, 'user'::user_role)
+FROM auth.users u
+LEFT JOIN public.profiles p ON p.id = u.id
+WHERE p.id IS NULL AND u.id IS NOT NULL;
+
+-- Backfill free subscriptions
+INSERT INTO public.subscriptions (user_id, tier, status)
+SELECT p.id, 'free', 'active'
+FROM public.profiles p
+LEFT JOIN public.subscriptions s ON s.user_id = p.id
+WHERE s.id IS NULL;
+
+-- ==============================================================================
+-- 20. PROMOTE TO SUPER ADMIN
+-- ==============================================================================
+-- To promote your account to super_admin, uncomment and run:
+--
+-- UPDATE public.profiles SET role = 'super_admin' WHERE email = 'YOUR_EMAIL_HERE';
+--
+
+-- ==============================================================================
+-- 21. REALTIME PUBLICATION
+-- ==============================================================================
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'app_config'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.app_config;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'templates'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.templates;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'profiles'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.profiles;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'posts'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.posts;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'notifications'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'ai_logs'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.ai_logs;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'team_invites'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.team_invites;
+  END IF;
+END $$;
+
+-- ==============================================================================
+-- 22. STORAGE: PUBLIC "avatars" BUCKET (mobile Settings profile picture)
+-- ==============================================================================
+
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('avatars', 'avatars', true)
+ON CONFLICT (id) DO NOTHING;
+
+DROP POLICY IF EXISTS "avatars_public_read" ON storage.objects;
+CREATE POLICY "avatars_public_read" ON storage.objects
+    FOR SELECT
+    USING (bucket_id = 'avatars');
+
+DROP POLICY IF EXISTS "avatars_owner_insert" ON storage.objects;
+CREATE POLICY "avatars_owner_insert" ON storage.objects
+    FOR INSERT TO authenticated
+    WITH CHECK (
+        bucket_id = 'avatars'
+        AND (storage.foldername(name))[1] = auth.uid()::text
+    );
+
+DROP POLICY IF EXISTS "avatars_owner_update" ON storage.objects;
+CREATE POLICY "avatars_owner_update" ON storage.objects
+    FOR UPDATE TO authenticated
+    USING (
+        bucket_id = 'avatars'
+        AND (storage.foldername(name))[1] = auth.uid()::text
+    );
+
+DROP POLICY IF EXISTS "avatars_owner_delete" ON storage.objects;
+CREATE POLICY "avatars_owner_delete" ON storage.objects
+    FOR DELETE TO authenticated
+    USING (
+        bucket_id = 'avatars'
+        AND (storage.foldername(name))[1] = auth.uid()::text
+    );
+
+-- ==============================================================================
+-- DONE! Verify with:
+--   SELECT count(*) FROM public.profiles;
+--   SELECT id, email, role, subscription_tier, credits_remaining FROM public.profiles;
+--   SELECT * FROM pg_policies WHERE schemaname = 'public';
+-- ==============================================================================

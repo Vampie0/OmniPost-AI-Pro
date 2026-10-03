@@ -125,6 +125,15 @@ serve(async (req) => {
       });
     }
 
+    // Record the generation in the per-user audit trail (mobile History reads ai_logs).
+    // Runs under the caller's JWT — requires the ai_logs_insert_own policy.
+    await supabaseClient.from('ai_logs').insert({
+      user_id: user.id,
+      prompt,
+      response: generatedResult,
+      tokens_used: tokensUsed,
+    });
+
     return new Response(
       JSON.stringify({
         result: generatedResult,
