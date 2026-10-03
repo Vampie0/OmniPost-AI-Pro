@@ -20,6 +20,7 @@ build
 # Turborepo & Cache
 .turbo
 .cache
+*.tsbuildinfo
 
 # Environment variables
 .env
@@ -31,3 +32,15 @@ build
 # OS Files
 .DS_Store
 Thumbs.db
+
+.vercel
+.env*
+
+# Local tool state (not project code)
+.qoder/
+.vercel-tmp/
+*.docx
+
+# Marketing video exports — large binaries stay local; compositions and docs are tracked
+*.mp4
+*.mp3
