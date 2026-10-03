@@ -1,51 +1,83 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
+import { goBackOr } from '@/utils/navigation';
 import { useTheme } from '@/theme/ThemeProvider';
+import { useAuthStore } from '@/store/useAuthStore';
 import { ScreenWrapper } from '@/components/templates/ScreenWrapper';
 import { GlassCard, Badge } from '@/components/atoms';
 import { useToast } from '@/components/atoms/CustomToast';
-import { ChevronLeft, Sparkles, Copy, Share2, Bookmark, Layers } from 'lucide-react-native';
+import { supabase, isPlaceholderUrl } from '@/services/supabase';
+import * as Clipboard from 'expo-clipboard';
+import { ChevronLeft, Copy } from 'lucide-react-native';
 
-const HISTORY_ITEMS = [
-  {
-    id: '1',
-    type: 'Caption & Hook',
-    platform: 'Instagram',
-    date: 'Today, 2:30 PM',
-    content: 'Why 90% of content creators give up in month 2 (and how to build a 7-figure distribution engine).',
-  },
-  {
-    id: '2',
-    type: 'Twitter Thread',
-    platform: 'Twitter / X',
-    date: 'Yesterday',
-    content: '5 lessons from building an autonomous social media architecture. 1/ Consistency > Luck. 2/ Automate the tedious parts...',
-  },
-  {
-    id: '3',
-    type: 'LinkedIn Thought Leadership',
-    platform: 'LinkedIn',
-    date: '3 days ago',
-    content: 'The shift from manual copywriting to AI-accelerated distribution is not a trend; it is the new baseline for B2B founders.',
-  },
-];
+interface HistoryItem {
+  id: string;
+  type: string;
+  platform: string;
+  date: string;
+  content: string;
+}
+
+const FALLBACK_HISTORY: HistoryItem[] = [];
 
 export default function HistoryVaultScreen() {
   const router = useRouter();
   const { theme } = useTheme();
   const { showToast } = useToast();
+  const user = useAuthStore((state) => state.user);
 
-  const [activeFilter, setActiveFilter] = useState<'all' | 'captions' | 'threads'>('all');
+  const [historyItems, setHistoryItems] = useState<HistoryItem[]>(FALLBACK_HISTORY);
 
-  const copyItem = (text: string) => {
-    showToast({ title: 'Copied to Clipboard!', type: 'success' });
+  const loadHistory = useCallback(async () => {
+    if (isPlaceholderUrl || !user) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('ai_logs')
+        .select('id, prompt, response, tokens_used, created_at')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (error || !data) return;
+
+      const items: HistoryItem[] = data.map((log) => ({
+        id: log.id,
+        type: 'AI Generation',
+        platform: 'All Platforms',
+        date: new Date(log.created_at).toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+        content: log.response || log.prompt,
+      }));
+
+      setHistoryItems(items);
+    } catch {
+      // Silent fail
+    }
+  }, [user]);
+
+  useEffect(() => {
+    loadHistory();
+  }, [loadHistory]);
+
+  const copyItem = async (text: string) => {
+    try {
+      await Clipboard.setStringAsync(text);
+      showToast({ title: 'Copied to Clipboard!', type: 'success' });
+    } catch {
+      showToast({ title: 'Copy Failed', message: 'Could not access the clipboard.', type: 'error' });
+    }
   };
 
   return (
     <ScreenWrapper scrollable contentContainerStyle={styles.container}>
       <TouchableOpacity
-        onPress={() => router.back()}
+        onPress={() => goBackOr(router)}
         style={[styles.backBtn, { backgroundColor: theme.colors.surfaceSubtle, borderColor: theme.colors.border }]}
       >
         <ChevronLeft size={20} color={theme.colors.textPrimary} />
@@ -60,7 +92,13 @@ export default function HistoryVaultScreen() {
 
       {/* History Feed */}
       <View style={styles.historyList}>
-        {HISTORY_ITEMS.map((item) => (
+        {historyItems.length === 0 ? (
+          <GlassCard style={styles.historyCard}>
+            <Text style={{ color: theme.colors.textMuted, textAlign: 'center', paddingVertical: 20 }}>
+              No AI generation history yet. Create some content first!
+            </Text>
+          </GlassCard>
+        ) : historyItems.map((item) => (
           <GlassCard key={item.id} elevated style={styles.historyCard}>
             <View style={styles.cardTop}>
               <View style={styles.badgeRow}>

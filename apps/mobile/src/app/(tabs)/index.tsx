@@ -4,11 +4,12 @@ import { useRouter } from 'expo-router';
 import { useSafePress } from '@/hooks/useSafePress';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useNotificationsStore } from '@/store/useNotificationsStore';
 import { ScreenWrapper } from '@/components/templates/ScreenWrapper';
 import { GlassCard, AnimatedButton, Badge } from '@/components/atoms';
 import { supabase, isPlaceholderUrl } from '@/services/supabase';
 import { PostItem } from '@socialpilot/types';
-import { Sparkles, Clock, CheckCircle, Zap, ArrowRight, Layers, Menu } from 'lucide-react-native';
+import { Sparkles, Clock, CheckCircle, Zap, Layers, Menu, Bell } from 'lucide-react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 
 export default function DashboardScreen() {
@@ -17,13 +18,14 @@ export default function DashboardScreen() {
   const { theme } = useTheme();
   const user = useAuthStore((state) => state.user);
   const fetchProfile = useAuthStore((state) => state.fetchProfile);
+  const unreadCount = useNotificationsStore((state) => state.unreadCount);
 
   const [posts, setPosts] = useState<PostItem[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [stats, setStats] = useState({
-    totalPosts: 8,
-    scheduled: 3,
-    published: 5,
+    totalPosts: 0,
+    scheduled: 0,
+    published: 0,
   });
 
   const loadDashboardData = async () => {
@@ -71,21 +73,22 @@ export default function DashboardScreen() {
     try {
       await fetchProfile(user.id);
 
-      const { data, error } = await supabase
-        .from('posts')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(5);
+      // Exact counts via head queries (no 1000-row cap, no content payloads)
+      // plus one small query for the 5-item recent feed.
+      const [totalRes, schedRes, pubRes, feedRes] = await Promise.all([
+        supabase.from('posts').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+        supabase.from('posts').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('status', 'scheduled'),
+        supabase.from('posts').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('status', 'published'),
+        supabase.from('posts').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(5),
+      ]);
 
-      if (data && !error) {
-        const postList = data as PostItem[];
-        setPosts(postList);
+      if (!totalRes.error && !feedRes.error) {
         setStats({
-          totalPosts: postList.length,
-          scheduled: postList.filter((p) => p.status === 'scheduled').length,
-          published: postList.filter((p) => p.status === 'published').length,
+          totalPosts: totalRes.count ?? 0,
+          scheduled: schedRes.count ?? 0,
+          published: pubRes.count ?? 0,
         });
+        setPosts((feedRes.data ?? []) as PostItem[]);
       }
     } catch (e) {
       console.warn('Dashboard error:', e);
@@ -141,20 +144,37 @@ export default function DashboardScreen() {
             </View>
           </View>
 
-          {/* Credits Live Meter Pill */}
-          <View
-            style={[
-              styles.creditsPill,
-              {
-                backgroundColor: theme.colors.badgeBg,
-                borderColor: theme.colors.badgeBorder,
-              },
-            ]}
-          >
-            <Zap size={14} color={theme.colors.badgeText} />
-            <Text style={[styles.creditsNumber, { color: theme.colors.badgeText }]}>
-              {user?.credits_remaining ?? 50} Credits
-            </Text>
+          <View style={styles.headerRightGroup}>
+            {/* Notification Inbox Bell */}
+            <TouchableOpacity
+              onPress={() => safePress(() => router.push('/notifications'))}
+              style={[styles.bellBtn, { backgroundColor: theme.colors.surfaceSubtle, borderColor: theme.colors.border }]}
+            >
+              <Bell size={18} color={theme.colors.textPrimary} />
+              {unreadCount > 0 && (
+                <View style={[styles.bellBadge, { backgroundColor: theme.colors.primary }]}>
+                  <Text style={[styles.bellBadgeText, { color: theme.colors.btnTextColor }]}>
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+
+            {/* Credits Live Meter Pill */}
+            <View
+              style={[
+                styles.creditsPill,
+                {
+                  backgroundColor: theme.colors.badgeBg,
+                  borderColor: theme.colors.badgeBorder,
+                },
+              ]}
+            >
+              <Zap size={14} color={theme.colors.badgeText} />
+              <Text style={[styles.creditsNumber, { color: theme.colors.badgeText }]}>
+                {user?.credits_remaining ?? 50} Credits
+              </Text>
+            </View>
           </View>
         </Animated.View>
 
@@ -241,7 +261,7 @@ export default function DashboardScreen() {
                 {post.content}
               </Text>
 
-              <View style={styles.postFooter}>
+              <View style={[styles.postFooter, { borderTopColor: theme.colors.border }]}>
                 <View style={styles.platformTags}>
                   {post.platforms.map((p) => (
                     <Text key={p} style={[styles.platTag, { color: theme.colors.textMuted }]}>
@@ -296,6 +316,34 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: -0.4,
     marginTop: 1,
+  },
+  headerRightGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  bellBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bellBadge: {
+    position: 'absolute',
+    top: -5,
+    right: -5,
+    minWidth: 17,
+    height: 17,
+    borderRadius: 9,
+    paddingHorizontal: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bellBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
   },
   creditsPill: {
     flexDirection: 'row',
@@ -412,7 +460,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.05)',
   },
   platformTags: {
     flexDirection: 'row',

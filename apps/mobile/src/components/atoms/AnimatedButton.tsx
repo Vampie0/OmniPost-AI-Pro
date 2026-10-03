@@ -1,7 +1,8 @@
 import React, { memo } from 'react';
 import { StyleSheet, Text, ViewStyle, TextStyle, View } from 'react-native';
 import { Pressable } from 'react-native';
-import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring, withTiming } from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/theme/ThemeProvider';
 import { LuminousOrbLoader } from './LuminousOrbLoader';
@@ -35,19 +36,31 @@ export const AnimatedButton: React.FC<AnimatedButtonProps> = memo(({
 }) => {
   const { theme } = useTheme();
   const scale = useSharedValue(1);
+  const pressed = useSharedValue(0);
   const lastPressRef = React.useRef(0);
+
+  const hasBorder = variant === 'outline';
+  const hasTint = variant === 'ghost';
+  const tint = `${theme.colors.primary}1A`;
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
+    borderColor: hasBorder
+      ? pressed.value > 0.5
+        ? theme.colors.borderActive
+        : theme.colors.border
+      : 'transparent',
+    backgroundColor: hasTint && pressed.value > 0.5 ? tint : 'transparent',
   }));
 
   const handlePressIn = () => {
-    if (!disabled && !loading) {
-      scale.value = withSpring(0.97, { damping: 15, stiffness: 350 });
-    }
+    if (disabled || loading) return;
+    pressed.value = withTiming(1, { duration: 130 });
+    scale.value = withSpring(0.97, { damping: 15, stiffness: 350 });
   };
 
   const handlePressOut = () => {
+    pressed.value = withTiming(0, { duration: 220 });
     scale.value = withSpring(1, { damping: 15, stiffness: 350 });
   };
 
@@ -82,6 +95,7 @@ export const AnimatedButton: React.FC<AnimatedButtonProps> = memo(({
         const now = Date.now();
         if (now - lastPressRef.current < 600 || disabled || loading) return;
         lastPressRef.current = now;
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
         onPress();
       }}
       onPressIn={handlePressIn}
@@ -91,12 +105,13 @@ export const AnimatedButton: React.FC<AnimatedButtonProps> = memo(({
         animatedStyle,
         styles.base,
         sizeStyles[size],
+        // borderColor is intentionally absent — the pressed state drives it from
+        // animatedStyle above, and a static value here would win the merge.
         variant === 'outline' && {
-          borderColor: theme.colors.border,
           borderWidth: 1.2,
           backgroundColor: theme.colors.surface,
         },
-        disabled && styles.disabled,
+        disabled && [styles.disabled, { backgroundColor: theme.colors.surfaceSubtle }],
         isGradient && !disabled && {
           shadowColor: theme.colors.glowColor,
           shadowOffset: { width: 0, height: 6 },
@@ -189,6 +204,5 @@ const styles = StyleSheet.create({
   },
   disabled: {
     opacity: 0.5,
-    backgroundColor: 'rgba(100, 116, 139, 0.25)',
   },
 });

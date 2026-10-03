@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
+import { goBackOr } from '@/utils/navigation';
 import { useTheme } from '@/theme/ThemeProvider';
 import { ScreenWrapper } from '@/components/templates/ScreenWrapper';
 import { GlassCard } from '@/components/atoms';
 import { CustomToggle } from '@/components/atoms/CustomToggle';
 import { useToast } from '@/components/atoms/CustomToast';
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from '@/utils/secureStorage';
 import { ChevronLeft, Calendar, Zap, BarChart3 } from 'lucide-react-native';
 
 export default function NotificationSettingsScreen() {
@@ -39,7 +40,7 @@ export default function NotificationSettingsScreen() {
   return (
     <ScreenWrapper scrollable contentContainerStyle={styles.container}>
       <TouchableOpacity
-        onPress={() => router.back()}
+        onPress={() => goBackOr(router)}
         style={[styles.backBtn, { backgroundColor: theme.colors.surfaceSubtle, borderColor: theme.colors.border }]}
       >
         <ChevronLeft size={20} color={theme.colors.textPrimary} />

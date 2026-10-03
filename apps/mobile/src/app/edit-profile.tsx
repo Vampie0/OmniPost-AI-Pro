@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
+import { goBackOr } from '@/utils/navigation';
 import { useSafePress } from '@/hooks/useSafePress';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -9,8 +11,7 @@ import { GlassCard, AnimatedButton, CustomInput } from '@/components/atoms';
 import { PhoneInput } from '@/components/atoms/PhoneInput';
 import { useToast } from '@/components/atoms/CustomToast';
 import { supabase, isPlaceholderUrl } from '@/services/supabase';
-import { ChevronLeft, Camera, User, Mail, AtSign, FileText } from 'lucide-react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { ChevronLeft, Camera, User, Mail, FileText } from 'lucide-react-native';
 
 const AVATAR_PRESETS = [
   'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=300&auto=format&fit=crop',
@@ -26,12 +27,11 @@ export default function EditProfileScreen() {
   const { showToast } = useToast();
   const { user, fetchProfile } = useAuthStore();
 
-  const [fullName, setFullName] = useState(user?.full_name || 'Alex Rivera');
-  const [email] = useState(user?.email || 'alex@company.com');
-  const [username, setUsername] = useState('alex_creator');
-  const [bio, setBio] = useState('Digital Creator & AI Growth Strategist');
-  const [phoneNumber, setPhoneNumber] = useState('3001234567');
-  const [selectedAvatar, setSelectedAvatar] = useState(AVATAR_PRESETS[0]);
+  const [fullName, setFullName] = useState(user?.full_name || '');
+  const [email] = useState(user?.email || '');
+  const [bio, setBio] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [selectedAvatar, setSelectedAvatar] = useState(user?.avatar_url || AVATAR_PRESETS[0]);
   const [isSaving, setIsSaving] = useState(false);
 
   const handleSaveProfile = async () => {
@@ -46,7 +46,7 @@ export default function EditProfileScreen() {
       if (isPlaceholderUrl || !user) {
         await new Promise((resolve) => setTimeout(resolve, 400));
         showToast({ title: 'Profile Updated!', message: 'Personal details saved successfully.', type: 'success' });
-        router.back();
+        goBackOr(router);
         return;
       }
 
@@ -64,7 +64,7 @@ export default function EditProfileScreen() {
       } else {
         await fetchProfile(user.id);
         showToast({ title: 'Profile Saved!', message: 'Your changes are live.', type: 'success' });
-        router.back();
+        goBackOr(router);
       }
     } catch {
       showToast({ title: 'Connection Error', message: 'Unable to update profile.', type: 'error' });
@@ -76,7 +76,7 @@ export default function EditProfileScreen() {
   return (
     <ScreenWrapper scrollable contentContainerStyle={styles.container}>
       <TouchableOpacity
-        onPress={() => safePress(() => router.back())}
+        onPress={() => safePress(() => goBackOr(router))}
         style={[styles.backBtn, { backgroundColor: theme.colors.surfaceSubtle, borderColor: theme.colors.border }]}
       >
         <ChevronLeft size={20} color={theme.colors.textPrimary} />
@@ -93,7 +93,7 @@ export default function EditProfileScreen() {
       <GlassCard elevated style={styles.avatarCard}>
         <View style={styles.currentAvatarWrapper}>
           <Image source={{ uri: selectedAvatar }} style={styles.currentAvatarImg} />
-          <View style={[styles.cameraBadge, { backgroundColor: theme.colors.primary }]}>
+          <View style={[styles.cameraBadge, { backgroundColor: theme.colors.primary, borderColor: theme.colors.surface }]}>
             <Camera size={14} color={theme.colors.btnTextColor} />
           </View>
         </View>
@@ -128,18 +128,10 @@ export default function EditProfileScreen() {
       <GlassCard elevated style={styles.formCard}>
         <CustomInput
           label="Full Name"
-          placeholder="Alex Rivera"
+          placeholder="Enter your full name"
           value={fullName}
           onChangeText={setFullName}
           leftIcon={<User size={18} color={theme.colors.primary} />}
-        />
-
-        <CustomInput
-          label="Username Handle"
-          placeholder="alex_creator"
-          value={username}
-          onChangeText={setUsername}
-          leftIcon={<AtSign size={18} color={theme.colors.primary} />}
         />
 
         <CustomInput
@@ -151,7 +143,7 @@ export default function EditProfileScreen() {
         />
 
         <PhoneInput
-          label="Phone Number"
+          label="Phone Number (Optional)"
           value={phoneNumber}
           onChangeText={setPhoneNumber}
         />
@@ -220,7 +212,6 @@ const styles = StyleSheet.create({
     width: 84,
     height: 84,
     borderRadius: 42,
-    backgroundColor: '#1E293B',
   },
   cameraBadge: {
     position: 'absolute',
@@ -232,7 +223,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: '#06070B',
   },
   avatarHint: {
     fontSize: 12,

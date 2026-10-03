@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
-import { AnimatedButton, Badge } from '@/components/atoms';
+import { AnimatedButton } from '@/components/atoms';
 import {
   Calendar as CalendarIcon,
   Clock,
@@ -14,18 +14,23 @@ import {
 interface ScheduleDatePickerSheetProps {
   visible: boolean;
   onClose: () => void;
-  onConfirmSchedule: (formattedDateTime: string) => void;
+  // isoDateTime is a real timestamp string ('' only if the time label can't be
+  // parsed) so consumers can persist scheduled_at — the display label alone is
+  // not reliably parseable by JS Date engines.
+  onConfirmSchedule: (formattedDateTime: string, isoDateTime: string) => void;
 }
 
 const HOURS = ['08:00 AM', '10:00 AM', '12:30 PM', '02:30 PM', '05:00 PM', '07:30 PM', '09:00 PM', '11:00 PM'];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 
-export const ScheduleDatePickerSheet: React.FC<ScheduleDatePickerSheetProps> = ({
+// Perf: memoized — the full-month day grid (up to 42 cells) would otherwise
+// re-render on every keystroke in screens that keep this sheet mounted.
+export const ScheduleDatePickerSheet = React.memo(function ScheduleDatePickerSheet({
   visible,
   onClose,
   onConfirmSchedule,
-}) => {
+}: ScheduleDatePickerSheetProps) {
   const { theme } = useTheme();
 
   const today = new Date();
@@ -61,7 +66,18 @@ export const ScheduleDatePickerSheet: React.FC<ScheduleDatePickerSheetProps> = (
 
   const handleConfirm = () => {
     const formatted = `${MONTHS[selectedMonth]} ${selectedDay}, ${selectedYear} at ${selectedTime}`;
-    onConfirmSchedule(formatted);
+    // Convert "hh:mm AM/PM" + selected day into a genuine Date → ISO string
+    const match = /^(\d{1,2}):(\d{2})\s*(AM|PM)$/i.exec(selectedTime ?? '');
+    let iso = '';
+    if (match) {
+      let hours = parseInt(match[1]!, 10);
+      const minutes = parseInt(match[2]!, 10);
+      const meridiem = match[3]!.toUpperCase();
+      if (meridiem === 'PM' && hours !== 12) hours += 12;
+      if (meridiem === 'AM' && hours === 12) hours = 0;
+      iso = new Date(selectedYear, selectedMonth, selectedDay, hours, minutes, 0, 0).toISOString();
+    }
+    onConfirmSchedule(formatted, iso);
     onClose();
   };
 
@@ -230,7 +246,7 @@ export const ScheduleDatePickerSheet: React.FC<ScheduleDatePickerSheetProps> = (
       </View>
     </Modal>
   );
-};
+});
 
 const styles = StyleSheet.create({
   modalBackdrop: {

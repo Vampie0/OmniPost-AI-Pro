@@ -1,4 +1,3 @@
-import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -10,7 +9,7 @@ export default function NotFoundScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <AlertCircle size={64} color={theme.colors.accent} style={styles.icon} />
+      <AlertCircle size={64} color={theme.colors.primary} style={styles.icon} />
       <Text style={[styles.title, { color: theme.colors.textPrimary }]}>Page Not Found</Text>
       <Text style={[styles.description, { color: theme.colors.textSecondary }]}>
         The screen you are looking for does not exist or has been moved.
@@ -19,7 +18,7 @@ export default function NotFoundScreen() {
         style={[styles.button, { backgroundColor: theme.colors.primary }]}
         onPress={() => router.replace('/')}
       >
-        <Text style={styles.buttonText}>Go to Home</Text>
+        <Text style={[styles.buttonText, { color: theme.colors.btnTextColor }]}>Go to Home</Text>
       </TouchableOpacity>
     </View>
   );
@@ -52,7 +51,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   buttonText: {
-    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
   },

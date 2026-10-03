@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
+import { goBackOr } from '@/utils/navigation';
 import { useSafePress } from '@/hooks/useSafePress';
 import { useTheme } from '@/theme/ThemeProvider';
 import { ScreenWrapper } from '@/components/templates/ScreenWrapper';
@@ -19,35 +20,36 @@ import {
   Share2,
   ChevronLeft,
   Layers,
-  Crown,
+  HelpCircle,
+  X,
 } from 'lucide-react-native';
-import * as Haptics from 'expo-haptics';
+import * as SecureStore from '@/utils/secureStorage';
 
-const CHANNELS: SocialChannelData[] = [
+const DEFAULT_CHANNELS: SocialChannelData[] = [
   {
     id: 'instagram',
     name: 'Instagram Business',
-    account: '@creator.studio',
+    account: 'Not Linked',
     icon: (c: string) => <Instagram size={22} color={c} />,
-    connected: true,
-    syncStatus: 'Active Auto-Publish',
+    connected: false,
+    syncStatus: 'Disconnected',
     discoveredProfiles: [
       {
-        id: 'ig_1',
-        name: 'Creator Studio Brand',
-        handle: '@creator.studio',
-        type: 'Instagram Business',
-        avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop',
-        followers: '124k',
-        selected: true,
+        id: 'ig-1',
+        name: 'My Brand Page',
+        handle: '@mybrand',
+        type: 'Business',
+        avatarUrl: 'https://ui-avatars.com/api/?name=My+Brand&background=E1306C&color=fff&size=100',
+        followers: '12.4K followers',
+        selected: false,
       },
       {
-        id: 'ig_2',
-        name: 'Studio Merch Shop',
-        handle: '@studio.merch',
-        type: 'Instagram Creator',
-        avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=200&auto=format&fit=crop',
-        followers: '32k',
+        id: 'ig-2',
+        name: 'Personal Creator',
+        handle: '@mycreator',
+        type: 'Creator',
+        avatarUrl: 'https://ui-avatars.com/api/?name=Creator&background=833AB4&color=fff&size=100',
+        followers: '3.8K followers',
         selected: false,
       },
     ],
@@ -55,38 +57,47 @@ const CHANNELS: SocialChannelData[] = [
   {
     id: 'twitter',
     name: 'Twitter / X',
-    account: '@alex_creator',
+    account: 'Not Linked',
     icon: (c: string) => <Twitter size={20} color={c} />,
-    connected: true,
-    syncStatus: 'Active Auto-Publish',
+    connected: false,
+    syncStatus: 'Disconnected',
     discoveredProfiles: [
       {
-        id: 'tw_1',
-        name: 'Alex Rivera (Verified)',
-        handle: '@alex_creator',
-        type: 'Personal Creator',
-        avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=200&auto=format&fit=crop',
-        followers: '48k',
-        selected: true,
+        id: 'tw-1',
+        name: 'My Account',
+        handle: '@myhandle',
+        type: 'Personal',
+        avatarUrl: 'https://ui-avatars.com/api/?name=Twitter&background=1DA1F2&color=fff&size=100',
+        followers: '5.2K followers',
+        selected: false,
       },
     ],
   },
   {
     id: 'linkedin',
     name: 'LinkedIn Creator',
-    account: 'Alex Rivera (Personal)',
+    account: 'Not Linked',
     icon: (c: string) => <Linkedin size={20} color={c} />,
-    connected: true,
-    syncStatus: 'Active Auto-Publish',
+    connected: false,
+    syncStatus: 'Disconnected',
     discoveredProfiles: [
       {
-        id: 'li_1',
-        name: 'Alex Rivera',
-        handle: 'alex-rivera-pro',
-        type: 'Personal Profile',
-        avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=200&auto=format&fit=crop',
-        followers: '18k',
-        selected: true,
+        id: 'li-1',
+        name: 'Professional Profile',
+        handle: '/in/myprofile',
+        type: 'Personal',
+        avatarUrl: 'https://ui-avatars.com/api/?name=LinkedIn&background=0A66C2&color=fff&size=100',
+        followers: '1.5K connections',
+        selected: false,
+      },
+      {
+        id: 'li-2',
+        name: 'Company Page',
+        handle: '/company/mycompany',
+        type: 'Company',
+        avatarUrl: 'https://ui-avatars.com/api/?name=Company&background=0A66C2&color=fff&size=100',
+        followers: '820 followers',
+        selected: false,
       },
     ],
   },
@@ -99,13 +110,13 @@ const CHANNELS: SocialChannelData[] = [
     syncStatus: 'Disconnected',
     discoveredProfiles: [
       {
-        id: 'tt_1',
-        name: 'Alex Rivera TikTok',
-        handle: '@alex.reels',
-        type: 'Creator Account',
-        avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop',
-        followers: '85k',
-        selected: true,
+        id: 'tt-1',
+        name: 'Creator Account',
+        handle: '@mytiktok',
+        type: 'Creator',
+        avatarUrl: 'https://ui-avatars.com/api/?name=TikTok&background=010101&color=fff&size=100',
+        followers: '24.1K followers',
+        selected: false,
       },
     ],
   },
@@ -118,13 +129,13 @@ const CHANNELS: SocialChannelData[] = [
     syncStatus: 'Disconnected',
     discoveredProfiles: [
       {
-        id: 'fb_1',
-        name: 'Studio Official Page',
-        handle: 'fb.com/creatorstudio',
-        type: 'Facebook Business Page',
-        avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=200&auto=format&fit=crop',
-        followers: '210k',
-        selected: true,
+        id: 'fb-1',
+        name: 'Business Page',
+        handle: '/mybusiness',
+        type: 'Page',
+        avatarUrl: 'https://ui-avatars.com/api/?name=Facebook&background=1877F2&color=fff&size=100',
+        followers: '6.7K likes',
+        selected: false,
       },
     ],
   },
@@ -136,33 +147,62 @@ export default function ConnectedAccountsScreen() {
   const { theme } = useTheme();
   const { showToast } = useToast();
 
-  const [channels, setChannels] = useState(CHANNELS);
+  const [channels, setChannels] = useState<SocialChannelData[]>(DEFAULT_CHANNELS);
+
+  // Load persisted channel connections on mount
+  useEffect(() => {
+    SecureStore.getItemAsync('connected_channels').then((saved) => {
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) {
+            setChannels((prev) =>
+              prev.map((ch) => {
+                const savedCh = parsed.find((s: SocialChannelData) => s.id === ch.id);
+                return savedCh ? { ...ch, ...savedCh } : ch;
+              })
+            );
+          }
+        } catch {}
+      }
+    });
+  }, []);
   const [selectedChannel, setSelectedChannel] = useState<SocialChannelData | null>(null);
   const [sheetVisible, setSheetVisible] = useState(false);
+  const [helpVisible, setHelpVisible] = useState(false);
 
   const openChannelSheet = (channel: SocialChannelData) => {
     setSelectedChannel(channel);
     setSheetVisible(true);
   };
 
+  const persistChannels = async (updated: SocialChannelData[]) => {
+    try {
+      await SecureStore.setItemAsync('connected_channels', JSON.stringify(updated));
+    } catch {}
+  };
+
   const handleConfirmConnect = (selectedProfiles: DiscoveredProfile[]) => {
     if (!selectedChannel) return;
     const channelId = selectedChannel.id;
     const channelName = selectedChannel.name;
-    const firstHandle = selectedProfiles[0]?.handle || '@creator.studio';
+    const firstHandle = selectedProfiles[0]?.handle || '@myaccount';
 
-    setChannels((prev) =>
-      prev.map((ch) =>
-        ch.id === channelId
-          ? {
-              ...ch,
-              connected: true,
-              account: selectedProfiles.length > 1 ? `${firstHandle} (+${selectedProfiles.length - 1})` : firstHandle,
-              syncStatus: 'Active Auto-Publish',
-            }
-          : ch
-      )
+    // Compute outside the updater: persistChannels is a side effect and must
+    // not run inside setChannels (double-invoked under StrictMode).
+    const updated = channels.map((ch) =>
+      ch.id === channelId
+        ? {
+            ...ch,
+            connected: true,
+            account: selectedProfiles.length > 1 ? `${firstHandle} (+${selectedProfiles.length - 1})` : firstHandle,
+            syncStatus: 'Active Auto-Publish',
+            discoveredProfiles: selectedProfiles,
+          }
+        : ch
     );
+    setChannels(updated);
+    void persistChannels(updated);
 
     setSheetVisible(false);
     showToast({
@@ -177,18 +217,19 @@ export default function ConnectedAccountsScreen() {
     const channelId = selectedChannel.id;
     const channelName = selectedChannel.name;
 
-    setChannels((prev) =>
-      prev.map((ch) =>
-        ch.id === channelId
-          ? {
-              ...ch,
-              connected: false,
-              account: 'Not Linked',
-              syncStatus: 'Disconnected',
-            }
-          : ch
-      )
+    const updated = channels.map((ch) =>
+      ch.id === channelId
+        ? {
+            ...ch,
+            connected: false,
+            account: 'Not Linked',
+            syncStatus: 'Disconnected',
+            discoveredProfiles: [],
+          }
+        : ch
     );
+    setChannels(updated);
+    void persistChannels(updated);
 
     setSheetVisible(false);
     showToast({
@@ -203,7 +244,7 @@ export default function ConnectedAccountsScreen() {
   return (
     <ScreenWrapper scrollable contentContainerStyle={styles.container}>
       <TouchableOpacity
-        onPress={() => safePress(() => router.back())}
+        onPress={() => safePress(() => goBackOr(router))}
         style={[styles.backBtn, { backgroundColor: theme.colors.surfaceSubtle, borderColor: theme.colors.border }]}
       >
         <ChevronLeft size={20} color={theme.colors.textPrimary} />
@@ -212,9 +253,18 @@ export default function ConnectedAccountsScreen() {
       <View style={styles.header}>
         <Text style={[styles.title, { color: theme.colors.textPrimary }]}>Connected Channels</Text>
         <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
-          OAuth 2.0 authenticated profiles for verified multi-platform publishing
+          Link your social media accounts to publish directly from the app
         </Text>
       </View>
+
+      {/* Help Button */}
+      <TouchableOpacity
+        onPress={() => setHelpVisible(true)}
+        style={[styles.helpBtn, { backgroundColor: theme.colors.surfaceSubtle, borderColor: theme.colors.border }]}
+      >
+        <HelpCircle size={16} color={theme.colors.primary} />
+        <Text style={[styles.helpBtnText, { color: theme.colors.textPrimary }]}>How to Connect Your Accounts</Text>
+      </TouchableOpacity>
 
       {/* Channel Usage Counter Card */}
       <GlassCard elevated style={styles.usageCounterCard}>
@@ -232,7 +282,7 @@ export default function ConnectedAccountsScreen() {
               </Text>
             </View>
           </View>
-          <Badge label="Pro VIP Plan" variant="primary" />
+          <Badge label="Up to 10 Profiles" variant="primary" />
         </View>
 
         <View style={[styles.usageBarBg, { backgroundColor: theme.colors.surfaceSubtle }]}>
@@ -248,11 +298,15 @@ export default function ConnectedAccountsScreen() {
         </View>
       </GlassCard>
 
-      {/* Channels List */}
-      <View style={styles.channelsList}>
+      {/* Channels List — horizontal scrollable row */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.channelsScrollRow}
+      >
         {channels.map((channel) => (
           <GlassCard key={channel.id} elevated style={styles.channelCard}>
-            <View style={styles.channelLeft}>
+            <View style={styles.channelInner}>
               <View
                 style={[
                   styles.iconBox,
@@ -264,54 +318,52 @@ export default function ConnectedAccountsScreen() {
                 {channel.icon(channel.connected ? theme.colors.primary : theme.colors.textMuted)}
               </View>
 
-              <View style={styles.channelDetails}>
-                <Text style={[styles.channelName, { color: theme.colors.textPrimary }]}>
-                  {channel.name}
+              <Text style={[styles.channelName, { color: theme.colors.textPrimary }]} numberOfLines={1}>
+                {channel.name}
+              </Text>
+              <Text style={[styles.channelAccount, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+                {channel.account}
+              </Text>
+              <View style={styles.statusRow}>
+                <View
+                  style={[
+                    styles.statusDot,
+                    { backgroundColor: channel.connected ? theme.colors.primary : theme.colors.textMuted },
+                  ]}
+                />
+                <Text
+                  style={[
+                    styles.syncStatusText,
+                    { color: channel.connected ? theme.colors.primary : theme.colors.textMuted },
+                  ]}
+                >
+                  {channel.connected ? 'Active' : 'Off'}
                 </Text>
-                <Text style={[styles.channelAccount, { color: theme.colors.textSecondary }]}>
-                  {channel.account}
-                </Text>
-                <View style={styles.statusRow}>
-                  <View
-                    style={[
-                      styles.statusDot,
-                      { backgroundColor: channel.connected ? '#00F5A0' : '#64748B' },
-                    ]}
-                  />
-                  <Text
-                    style={[
-                      styles.syncStatusText,
-                      { color: channel.connected ? '#00F5A0' : theme.colors.textMuted },
-                    ]}
-                  >
-                    {channel.syncStatus}
-                  </Text>
-                </View>
               </View>
-            </View>
 
-            <TouchableOpacity
-              onPress={() => openChannelSheet(channel)}
-              style={[
-                styles.actionPill,
-                {
-                  backgroundColor: channel.connected ? 'rgba(244, 63, 94, 0.12)' : theme.colors.badgeBg,
-                  borderColor: channel.connected ? 'rgba(244, 63, 94, 0.3)' : theme.colors.badgeBorder,
-                },
-              ]}
-            >
-              <Text
+              <TouchableOpacity
+                onPress={() => openChannelSheet(channel)}
                 style={[
-                  styles.actionPillText,
-                  { color: channel.connected ? '#F43F5E' : theme.colors.badgeText },
+                  styles.actionPill,
+                  {
+                    backgroundColor: channel.connected ? theme.colors.badgeBg : theme.colors.surfaceSubtle,
+                    borderColor: channel.connected ? theme.colors.badgeBorder : theme.colors.border,
+                  },
                 ]}
               >
-                {channel.connected ? 'Manage' : 'Connect'}
-              </Text>
-            </TouchableOpacity>
+                <Text
+                  style={[
+                    styles.actionPillText,
+                    { color: channel.connected ? theme.colors.primary : theme.colors.textSecondary },
+                  ]}
+                >
+                  {channel.connected ? 'Manage' : 'Connect'}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </GlassCard>
         ))}
-      </View>
+      </ScrollView>
 
       {/* Permission & Multi-Account Discovery Sheet */}
       <SocialConnectSheet
@@ -321,6 +373,44 @@ export default function ConnectedAccountsScreen() {
         onConfirmConnect={handleConfirmConnect}
         onConfirmDisconnect={handleConfirmDisconnect}
       />
+
+      {/* Help Modal */}
+      <Modal visible={helpVisible} animationType="slide" transparent onRequestClose={() => setHelpVisible(false)}>
+        <View style={styles.helpBackdrop}>
+          <View style={[styles.helpSheet, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+            <View style={styles.helpHeader}>
+              <Text style={[styles.helpTitle, { color: theme.colors.textPrimary }]}>Connecting Your Accounts</Text>
+              <TouchableOpacity onPress={() => setHelpVisible(false)}>
+                <X size={20} color={theme.colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
+              <Text style={[styles.helpText, { color: theme.colors.textSecondary }]}>
+                To connect a social media channel, follow these steps:
+              </Text>
+              <View style={[styles.helpStep, { backgroundColor: theme.colors.surfaceSubtle, borderColor: theme.colors.border }]}>
+                <Text style={[styles.helpStepNum, { color: theme.colors.primary }]}>1</Text>
+                <Text style={[styles.helpStepText, { color: theme.colors.textPrimary }]}>Tap on any channel card (Instagram, Twitter, LinkedIn, etc.)</Text>
+              </View>
+              <View style={[styles.helpStep, { backgroundColor: theme.colors.surfaceSubtle, borderColor: theme.colors.border }]}>
+                <Text style={[styles.helpStepNum, { color: theme.colors.primary }]}>2</Text>
+                <Text style={[styles.helpStepText, { color: theme.colors.textPrimary }]}>Tap "Connect" and select your profile from the discovered accounts</Text>
+              </View>
+              <View style={[styles.helpStep, { backgroundColor: theme.colors.surfaceSubtle, borderColor: theme.colors.border }]}>
+                <Text style={[styles.helpStepNum, { color: theme.colors.primary }]}>3</Text>
+                <Text style={[styles.helpStepText, { color: theme.colors.textPrimary }]}>Allow access when the platform asks for permission</Text>
+              </View>
+              <View style={[styles.helpStep, { backgroundColor: theme.colors.surfaceSubtle, borderColor: theme.colors.border }]}>
+                <Text style={[styles.helpStepNum, { color: theme.colors.primary }]}>4</Text>
+                <Text style={[styles.helpStepText, { color: theme.colors.textPrimary }]}>Your channel is now active and ready for auto-publishing</Text>
+              </View>
+              <Text style={[styles.helpText, { color: theme.colors.textMuted }]}>
+                To remove a connected account, tap "Manage" on the channel card and select "Disconnect". This revokes all tokens and stops auto-publishing.
+              </Text>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </ScreenWrapper>
   );
 }
@@ -392,21 +482,18 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: 3,
   },
-  channelsList: {
+  channelsScrollRow: {
     gap: 12,
+    paddingVertical: 2,
   },
   channelCard: {
-    padding: 16,
-    borderRadius: 22,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    width: 140,
+    padding: 14,
+    borderRadius: 20,
   },
-  channelLeft: {
-    flexDirection: 'row',
+  channelInner: {
     alignItems: 'center',
-    gap: 14,
-    flex: 1,
+    gap: 6,
   },
   iconBox: {
     width: 46,
@@ -414,18 +501,17 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  channelDetails: {
-    gap: 2,
-    flex: 1,
+    marginBottom: 2,
   },
   channelName: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '800',
+    textAlign: 'center',
   },
   channelAccount: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '500',
+    textAlign: 'center',
   },
   statusRow: {
     flexDirection: 'row',
@@ -443,13 +529,73 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   actionPill: {
-    paddingHorizontal: 12,
-    paddingVertical: 6.5,
-    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 5,
+    borderRadius: 10,
     borderWidth: 1,
+    marginTop: 2,
   },
   actionPillText: {
     fontSize: 12,
     fontWeight: '800',
+  },
+  helpBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    gap: 8,
+  },
+  helpBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  helpBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    justifyContent: 'flex-end',
+  },
+  helpSheet: {
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    borderWidth: 1,
+    padding: 22,
+    maxHeight: '75%',
+    gap: 10,
+  },
+  helpHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  helpTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  helpText: {
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  helpStep: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    gap: 10,
+  },
+  helpStepNum: {
+    fontSize: 16,
+    fontWeight: '900',
+    width: 24,
+    textAlign: 'center',
+  },
+  helpStepText: {
+    fontSize: 13,
+    fontWeight: '600',
+    flex: 1,
   },
 });

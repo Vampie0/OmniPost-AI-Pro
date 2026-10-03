@@ -1,15 +1,19 @@
 import { useEffect, useState } from 'react';
-import { Stack } from 'expo-router';
+import { Stack, Redirect, usePathname } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { StyleSheet, View, Text } from 'react-native';
+import { StyleSheet, View, Text, Platform } from 'react-native';
+
 
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useConfigStore } from '@/store/useConfigStore';
+import { useNotificationsStore } from '@/store/useNotificationsStore';
+import { registerPushNotifications } from '@/services/pushNotifications';
+import { isPlaceholderUrl } from '@/services/supabase';
 import { ToastProvider } from '@/components/atoms/CustomToast';
 import { AnimatedSplashScreen } from '@/components/templates/AnimatedSplashScreen';
 
@@ -31,8 +35,47 @@ const queryClient = new QueryClient({
   },
 });
 
+// Screens reachable without a session (auth flow + built-in diagnostics)
+const PUBLIC_PATHS = ['/', '/login', '/register', '/forgot-password', '/update-password', '/onboarding', '/test-connection'];
+
 function RootNavigationStack() {
   const { theme } = useTheme();
+  const pathname = usePathname();
+  const user = useAuthStore((state) => state.user);
+  const sessionChecked = useAuthStore((state) => state.sessionChecked);
+
+  // Expo Router may report grouped paths like "/(tabs)/generate" — strip group
+  // segments so the allowlist matches the URL the user actually sees.
+  const cleanPath = (pathname || '/')
+    .replace(/\/\([^)]*\)/g, '/')
+    .replace(/\/{2,}/g, '/');
+  const isPublic = PUBLIC_PATHS.includes(cleanPath) || cleanPath.startsWith('/+not-found');
+
+  const userId = user?.id;
+
+  // Notification backbone: inbox fetch + realtime inserts + device push
+  // registration. watchProfile (useAuthStore) already streams is_suspended
+  // live, so no second profiles subscription is needed here.
+  useEffect(() => {
+    if (isPlaceholderUrl || !userId) return;
+    const store = useNotificationsStore.getState();
+    store.fetchNotifications(userId);
+    store.subscribeRealtime(userId);
+    registerPushNotifications(userId);
+    return () => store.unsubscribeRealtime();
+  }, [userId]);
+
+  // Global auth gate: no app screen renders without a session.
+  // Placeholder (demo) mode stays explorable since it has no backend to auth against.
+  if (!isPlaceholderUrl && sessionChecked && !user && !isPublic) {
+    return <Redirect href="/(auth)/login" />;
+  }
+
+  // Suspended while browsing → force the suspension card on '/' (it shows
+  // the admin-provided reason and a sign-out action).
+  if (!isPlaceholderUrl && sessionChecked && user?.is_suspended && !isPublic) {
+    return <Redirect href="/" />;
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -56,6 +99,7 @@ function RootNavigationStack() {
           }}
         />
         <Stack.Screen name="+not-found" options={{ title: 'Not Found', presentation: 'modal' }} />
+        <Stack.Screen name="test-connection" options={{ title: 'Connection Test', presentation: 'modal' }} />
       </Stack>
     </View>
   );
@@ -98,7 +142,7 @@ function OfflineBanner() {
 
   return (
     <View style={[styles.offlineBanner, { backgroundColor: theme.colors.primary }]}>
-      <Text style={styles.offlineText}>No internet connection — reconnecting...</Text>
+      <Text style={[styles.offlineText, { color: theme.colors.btnTextColor }]}>No internet connection — reconnecting...</Text>
     </View>
   );
 }
@@ -106,6 +150,25 @@ function OfflineBanner() {
 export default function RootLayout() {
   const [isReady, setIsReady] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
+
+  // Web only: neutralize Chrome's autofill background (white/yellow) which
+  // ignores the app's dark theme. Injected at runtime because the Metro web
+  // dev server template does not pick up a custom +html.tsx.
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    if (document.getElementById('autofill-reset')) return;
+    const style = document.createElement('style');
+    style.id = 'autofill-reset';
+    style.textContent = [
+      'input:-webkit-autofill,',
+      'input:-webkit-autofill:hover,',
+      'input:-webkit-autofill:focus,',
+      'input:-webkit-autofill:active {',
+      'transition: background-color 9999999s ease-in-out 0s, color 9999999s ease-in-out 0s, -webkit-text-fill-color 9999999s ease-in-out 0s;',
+      '}',
+    ].join('\n');
+    document.head.appendChild(style);
+  }, []);
 
   const initializeAuth = useAuthStore((state) => state.initializeAuth);
   const sessionChecked = useAuthStore((state) => state.sessionChecked);
@@ -143,7 +206,7 @@ export default function RootLayout() {
     return (
       <GestureHandlerRootView style={styles.container}>
         <SafeAreaProvider>
-          <View style={styles.container} />
+          <View style={[styles.container, { backgroundColor: '#07080B' }]} />
         </SafeAreaProvider>
       </GestureHandlerRootView>
     );
@@ -171,7 +234,6 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#07080B',
   },
   offlineBanner: {
     position: 'absolute',
@@ -185,7 +247,6 @@ const styles = StyleSheet.create({
     zIndex: 9999,
   },
   offlineText: {
-    color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '700',
   },

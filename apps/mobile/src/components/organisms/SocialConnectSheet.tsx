@@ -1,18 +1,15 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, Image } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView } from 'react-native';
+import { Image } from 'expo-image';
 import { useTheme } from '@/theme/ThemeProvider';
-import { GlassCard, AnimatedButton, Badge } from '@/components/atoms';
+import { AnimatedButton, Badge } from '@/components/atoms';
 import {
   ShieldCheck,
-  CheckCircle2,
   X,
   Check,
   HelpCircle,
   AlertTriangle,
-  RefreshCw,
-  ExternalLink,
 } from 'lucide-react-native';
-import * as Haptics from 'expo-haptics';
 
 export interface DiscoveredProfile {
   id: string;
@@ -124,40 +121,40 @@ export const SocialConnectSheet: React.FC<SocialConnectSheetProps> = ({
                 <View style={[styles.tokenHealthBox, { backgroundColor: theme.colors.surfaceSubtle, borderColor: theme.colors.border }]}>
                   <View style={styles.tokenHealthTop}>
                     <View style={styles.tokenHealthStatus}>
-                      <View style={[styles.greenDot, { backgroundColor: '#00F5A0' }]} />
+                      <View style={[styles.greenDot, { backgroundColor: theme.colors.primary }]} />
                       <Text style={[styles.tokenHealthTitle, { color: theme.colors.textPrimary }]}>
-                        Auto-Publish Sync Active
+                        Auto-Publish Active
                       </Text>
                     </View>
-                    <Badge label="Healthy" variant="primary" />
+                    <Badge label="Connected" variant="primary" />
                   </View>
                   <Text style={[styles.tokenHealthDesc, { color: theme.colors.textSecondary }]}>
-                    OAuth tokens are securely authenticated and ready for background scheduled publishing.
+                    Your account is linked and ready for scheduled publishing.
                   </Text>
                 </View>
 
                 {/* Warning on Disconnect */}
-                <View style={styles.warningAlert}>
-                  <AlertTriangle size={18} color="#F43F5E" />
-                  <Text style={styles.warningText}>
-                    Disconnecting will un-schedule pending posts for this channel.
+                <View style={[styles.warningAlert, { backgroundColor: `${theme.colors.primary}1A`, borderColor: `${theme.colors.primary}40` }]}>
+                  <AlertTriangle size={18} color={theme.colors.primary} />
+                  <Text style={[styles.warningText, { color: theme.colors.primary }]}>
+                    Disconnecting will remove scheduled posts for this channel.
                   </Text>
                 </View>
 
                 <AnimatedButton
-                  title={isProcessing ? 'Revoking Access...' : 'Disconnect Channel'}
+                  title={isProcessing ? 'Disconnecting...' : 'Disconnect Channel'}
                   onPress={handleDisconnect}
                   loading={isProcessing}
                   variant="outline"
                   size="lg"
-                  textStyle={{ color: '#F43F5E' }}
-                  style={{ borderColor: 'rgba(244, 63, 94, 0.4)', marginTop: 8 }}
+                  textStyle={{ color: theme.colors.primary }}
+                  style={{ borderColor: `${theme.colors.primary}66`, marginTop: 8 }}
                 />
               </View>
             ) : (
               // Discovery & Selection Flow (Multi-Page / Multi-Profile)
               <>
-                {/* Expandable Helper Guide */}
+                {/* Expandable Helper Guide — platform-specific */}
                 <TouchableOpacity
                   onPress={() => setShowHelper((prev) => !prev)}
                   style={[styles.helperBanner, { backgroundColor: theme.colors.badgeBg, borderColor: theme.colors.badgeBorder }]}
@@ -165,7 +162,7 @@ export const SocialConnectSheet: React.FC<SocialConnectSheetProps> = ({
                   <View style={styles.helperBannerLeft}>
                     <HelpCircle size={15} color={theme.colors.badgeText} />
                     <Text style={[styles.helperBannerText, { color: theme.colors.badgeText }]}>
-                      How to link Instagram / Meta correctly?
+                      How to connect {channel?.name || 'your account'}?
                     </Text>
                   </View>
                   <Text style={[styles.helperToggleText, { color: theme.colors.badgeText }]}>
@@ -176,13 +173,13 @@ export const SocialConnectSheet: React.FC<SocialConnectSheetProps> = ({
                 {showHelper && (
                   <View style={[styles.helperContentBox, { backgroundColor: theme.colors.surfaceSubtle, borderColor: theme.colors.border }]}>
                     <Text style={[styles.helperStep, { color: theme.colors.textPrimary }]}>
-                      1. Make sure your Instagram is a <Text style={{ fontWeight: '800' }}>Professional / Creator Account</Text>.
+                      1. Make sure your account is set to <Text style={{ fontWeight: '800' }}>Professional or Creator</Text> mode.
                     </Text>
                     <Text style={[styles.helperStep, { color: theme.colors.textPrimary }]}>
-                      2. Connect it to a <Text style={{ fontWeight: '800' }}>Facebook Page</Text> you manage.
+                      2. Link it to the <Text style={{ fontWeight: '800' }}>business page</Text> you manage.
                     </Text>
                     <Text style={[styles.helperStep, { color: theme.colors.textPrimary }]}>
-                      3. Select your brand from the list below and tap Link.
+                      3. Select your profile from the list below and tap Connect.
                     </Text>
                   </View>
                 )}
@@ -241,9 +238,9 @@ export const SocialConnectSheet: React.FC<SocialConnectSheetProps> = ({
 
                 {/* Security Seal */}
                 <View style={styles.securitySeal}>
-                  <ShieldCheck size={16} color="#00F5A0" />
-                  <Text style={styles.securitySealText}>
-                    Direct Meta Graph OAuth 2.0. No passwords stored.
+                  <ShieldCheck size={16} color={theme.colors.primary} />
+                  <Text style={[styles.securitySealText, { color: theme.colors.textMuted }]}>
+                    Secure direct connection. We never store your password.
                   </Text>
                 </View>
 
@@ -369,7 +366,6 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#1E293B',
   },
   profileInfo: {
     flex: 1,
@@ -410,7 +406,6 @@ const styles = StyleSheet.create({
   },
   securitySealText: {
     fontSize: 11.5,
-    color: '#94A3B8',
     lineHeight: 16,
     flex: 1,
   },
@@ -455,13 +450,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 14,
     borderRadius: 16,
-    backgroundColor: 'rgba(244, 63, 94, 0.12)',
-    borderColor: 'rgba(244, 63, 94, 0.3)',
     borderWidth: 1,
     gap: 10,
   },
   warningText: {
-    color: '#F43F5E',
     fontSize: 12.5,
     lineHeight: 17,
     fontWeight: '600',

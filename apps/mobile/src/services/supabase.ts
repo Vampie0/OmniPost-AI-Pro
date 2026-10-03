@@ -35,6 +35,9 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     storage: ExpoSecureStoreAdapter,
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: false,
+    // Web: consume the recovery/confirm token that Supabase's email link
+    // redirect appends to the URL (fires PASSWORD_RECOVERY). Native has no
+    // browser URL, so it stays disabled there.
+    detectSessionInUrl: Platform.OS === 'web',
   },
 });

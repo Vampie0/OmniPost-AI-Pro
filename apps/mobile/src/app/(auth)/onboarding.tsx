@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
-import { View, Text, StyleSheet, FlatList, Dimensions, ViewToken, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, FlatList, useWindowDimensions, TouchableOpacity } from 'react-native';
+import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafePress } from '@/hooks/useSafePress';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -10,8 +11,6 @@ import { ScreenWrapper } from '@/components/templates/ScreenWrapper';
 import { AnimatedButton, GlassCard } from '@/components/atoms';
 import { Sparkles, Calendar, TrendingUp, Zap } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-
-const { width } = Dimensions.get('window');
 
 interface Slide {
   id: string;
@@ -53,14 +52,24 @@ export default function OnboardingScreen() {
   const appConfig = useConfigStore((state) => state.config);
   const appName = appConfig?.app_name || APP_BRANDING.appName;
 
+  const { width } = useWindowDimensions();
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef<FlatList<Slide>>(null);
 
-  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
-    if (viewableItems.length > 0 && viewableItems[0]?.index !== undefined && viewableItems[0]?.index !== null) {
-      setCurrentIndex(viewableItems[0].index);
-    }
-  }).current;
+  // Track the active slide from scroll position (onViewableItemsChanged does
+  // not fire on react-native-web, so scroll events are the cross-platform source).
+  const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    if (width <= 0) return;
+    const x = e.nativeEvent.contentOffset.x;
+    const idx = Math.min(SLIDES.length - 1, Math.max(0, Math.round(x / width)));
+    setCurrentIndex(idx);
+  };
+
+  const getItemLayout = (_data: ArrayLike<Slide> | null | undefined, index: number) => ({
+    length: width,
+    offset: width * index,
+    index,
+  });
 
   const handleFinish = async () => {
     await setOnboardingCompleted();
@@ -69,7 +78,7 @@ export default function OnboardingScreen() {
 
   const handleNext = async () => {
     if (currentIndex < SLIDES.length - 1) {
-      flatListRef.current?.scrollToIndex({ index: currentIndex + 1, animated: true });
+      flatListRef.current?.scrollToOffset({ offset: (currentIndex + 1) * width, animated: true });
     } else {
       await handleFinish();
     }
@@ -104,8 +113,9 @@ export default function OnboardingScreen() {
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
-        onViewableItemsChanged={onViewableItemsChanged}
-        viewabilityConfig={{ viewAreaCoveragePercentThreshold: 50 }}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+        getItemLayout={getItemLayout}
         renderItem={({ item }) => (
           <View style={[styles.slideContainer, { width }]}>
             <GlassCard elevated style={styles.slideCard}>

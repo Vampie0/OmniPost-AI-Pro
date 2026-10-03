@@ -1,4 +1,3 @@
-import React from 'react';
 import {
   View,
   Text,
@@ -10,6 +9,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { goBackOr } from '@/utils/navigation';
 import { useSafePress } from '@/hooks/useSafePress';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -38,14 +38,11 @@ export default function StudioMenuScreen() {
   const { signOut } = useAuthStore();
 
   const navigateTo = (route: any) => {
-    router.back();
-    setTimeout(() => {
-      router.push(route);
-    }, 150);
+    router.push(route);
   };
 
   const handleSignOut = async () => {
-    router.back();
+    goBackOr(router);
     await signOut();
     router.replace('/(auth)/login');
   };
@@ -66,7 +63,7 @@ export default function StudioMenuScreen() {
         ]}
       >
         {/* Workspace Brand Header */}
-        <View style={styles.drawerHeader}>
+        <View style={[styles.drawerHeader, { borderBottomColor: theme.colors.border }]}>
           <View style={styles.headerBrandRow}>
             <LinearGradient
               colors={[...theme.colors.primaryGradient]}
@@ -86,7 +83,7 @@ export default function StudioMenuScreen() {
             </View>
           </View>
 
-          <TouchableOpacity onPress={() => safePress(() => router.back())} style={styles.closeBtn}>
+          <TouchableOpacity onPress={() => safePress(() => goBackOr(router))} style={styles.closeBtn}>
             <X size={20} color={theme.colors.textSecondary} />
           </TouchableOpacity>
         </View>
@@ -181,14 +178,14 @@ export default function StudioMenuScreen() {
         {/* Drawer Footer: Sign Out */}
         <View style={[styles.drawerFooter, { borderTopColor: theme.colors.border }]}>
           <TouchableOpacity onPress={() => safePress(handleSignOut)} style={styles.signOutBtn}>
-            <LogOut size={16} color="#F43F5E" />
-            <Text style={styles.signOutText}>Sign Out of Studio</Text>
+            <LogOut size={16} color={theme.colors.primary} />
+            <Text style={[styles.signOutText, { color: theme.colors.primary }]}>Sign Out of Studio</Text>
           </TouchableOpacity>
         </View>
       </View>
 
       {/* Backdrop (Tap to Close) */}
-      <Pressable style={styles.backdrop} onPress={() => router.back()} />
+      <Pressable style={styles.backdrop} onPress={() => goBackOr(router)} />
     </View>
   );
 }
@@ -219,7 +216,6 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     paddingBottom: 14,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
   },
   headerBrandRow: {
     flexDirection: 'row',
@@ -299,7 +295,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   signOutText: {
-    color: '#F43F5E',
     fontSize: 13,
     fontWeight: '700',
   },

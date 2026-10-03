@@ -10,6 +10,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CheckCircle2, AlertCircle, Info, X } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
+import { useTheme } from '@/theme/ThemeProvider';
 
 const { width } = Dimensions.get('window');
 
@@ -31,6 +33,7 @@ const ToastContext = createContext<ToastContextType | null>(null);
 
 export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const insets = useSafeAreaInsets();
+  const { theme } = useTheme();
   const [toastData, setToastData] = useState<ToastOptions | null>(null);
 
   const translateY = useSharedValue(-130);
@@ -58,6 +61,14 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
 
       setToastData({ title, message, type });
+
+      const haptic =
+        type === 'success'
+          ? Haptics.NotificationFeedbackType.Success
+          : type === 'error'
+            ? Haptics.NotificationFeedbackType.Error
+            : Haptics.NotificationFeedbackType.Warning;
+      Haptics.notificationAsync(haptic).catch(() => {});
 
       // Controlled Sweet-Spot Micro-Bounce Physics (3-5px soft rebound)
       opacity.value = withTiming(1, { duration: 150 });
@@ -88,27 +99,19 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     opacity: opacity.value,
   }));
 
-  const getBorderColor = () => {
-    switch (toastData?.type) {
-      case 'success':
-        return 'rgba(0, 245, 160, 0.55)';
-      case 'error':
-        return 'rgba(244, 63, 94, 0.65)';
-      default:
-        return 'rgba(56, 189, 248, 0.5)';
-    }
-  };
+  /**
+   * Status accents come from the active palette rather than fixed hexes, so a toast
+   * reads correctly in all five palettes and in both light and dark.
+   */
+  const accent =
+    toastData?.type === 'success'
+      ? theme.colors.secondaryGradient[0]
+      : toastData?.type === 'error'
+        ? theme.colors.accentGradient[0]
+        : theme.colors.primary;
 
-  const getIcon = () => {
-    switch (toastData?.type) {
-      case 'success':
-        return <CheckCircle2 size={19} color="#00F5A0" />;
-      case 'error':
-        return <AlertCircle size={19} color="#F43F5E" />;
-      default:
-        return <Info size={20} color="#38BDF8" />;
-    }
-  };
+  const StatusIcon =
+    toastData?.type === 'success' ? CheckCircle2 : toastData?.type === 'error' ? AlertCircle : Info;
 
   return (
     <ToastContext.Provider value={{ showToast, hideToast }}>
@@ -117,25 +120,36 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         <Animated.View
           style={[
             styles.toastContainer,
-            { borderColor: getBorderColor() },
+            {
+              borderColor: `${accent}8C`,
+              backgroundColor: theme.colors.surface,
+              shadowColor: theme.colors.background,
+            },
             animatedStyle,
           ]}
         >
-          <View style={styles.iconWrapper}>{getIcon()}</View>
+          <View style={[styles.iconWrapper, { backgroundColor: `${accent}1F` }]}>
+            <StatusIcon size={19} color={accent} />
+          </View>
 
           <View style={styles.textContainer}>
-            <Text numberOfLines={1} style={styles.title}>{toastData.title}</Text>
+            <Text numberOfLines={1} style={[styles.title, { color: theme.colors.textPrimary }]}>
+              {toastData.title}
+            </Text>
             {toastData.message ? (
-              <Text numberOfLines={2} style={styles.message}>{toastData.message}</Text>
+              <Text numberOfLines={2} style={[styles.message, { color: theme.colors.textSecondary }]}>
+                {toastData.message}
+              </Text>
             ) : null}
           </View>
 
           <TouchableOpacity
             onPress={hideToast}
+            activeOpacity={0.5}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             style={styles.closeButton}
           >
-            <X size={16} color="rgba(148, 163, 184, 0.7)" />
+            <X size={16} color={theme.colors.textMuted} />
           </TouchableOpacity>
         </Animated.View>
       )}
@@ -158,14 +172,12 @@ const styles = StyleSheet.create({
     left: 18,
     right: 18,
     width: width - 36,
-    backgroundColor: '#0C0E17',
     borderRadius: 18,
     borderWidth: 1.2,
     paddingHorizontal: 16,
     paddingVertical: 13,
     flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000000',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.5,
     shadowRadius: 20,
@@ -174,19 +186,22 @@ const styles = StyleSheet.create({
   },
   iconWrapper: {
     marginRight: 12,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   textContainer: {
     flex: 1,
     paddingRight: 8,
   },
   title: {
-    color: '#FFFFFF',
     fontSize: 13.5,
     fontWeight: '800',
     letterSpacing: -0.2,
   },
   message: {
-    color: '#94A3B8',
     fontSize: 12,
     marginTop: 2,
     lineHeight: 16,

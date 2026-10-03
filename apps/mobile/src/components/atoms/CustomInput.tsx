@@ -1,5 +1,5 @@
 import React, { memo, useState, useEffect } from 'react';
-import { View, TextInput, Text, StyleSheet, TextInputProps, ViewStyle, TouchableOpacity } from 'react-native';
+import { View, TextInput, Text, StyleSheet, TextInputProps, ViewStyle, TextStyle, TouchableOpacity, Platform } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -44,6 +44,14 @@ export const CustomInput: React.FC<CustomInputProps> = memo(({
     opacity: laserProgress.value,
   }));
 
+  // Web-only input extras: themed caret (white caret on a masked password
+  // reads as a blinking dot). Types in this RN version don't expose
+  // caretColor on TextStyle, hence the cast; native keeps its default caret.
+  const webInputStyle: TextStyle | undefined =
+    Platform.OS === 'web'
+      ? ({ caretColor: theme.colors.primary } as unknown as TextStyle)
+      : undefined;
+
   return (
     <View style={[styles.container, containerStyle]}>
       {label ? (
@@ -63,7 +71,7 @@ export const CustomInput: React.FC<CustomInputProps> = memo(({
           {
             backgroundColor: theme.colors.inputBg,
             borderColor: error
-              ? '#F43F5E'
+              ? theme.colors.primary
               : isFocused
               ? theme.colors.borderActive
               : theme.colors.border,
@@ -74,7 +82,7 @@ export const CustomInput: React.FC<CustomInputProps> = memo(({
 
         <TextInput
           placeholderTextColor={theme.colors.textMuted}
-          style={[styles.input, { color: theme.colors.textPrimary }, style]}
+          style={[styles.input, { color: theme.colors.textPrimary }, webInputStyle, NO_OUTLINE, style]}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
           secureTextEntry={isPassword && !showPassword}
@@ -107,12 +115,20 @@ export const CustomInput: React.FC<CustomInputProps> = memo(({
         </Animated.View>
       </View>
 
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      {error ? <Text style={[styles.errorText, { color: theme.colors.primary }]}>{error}</Text> : null}
     </View>
   );
 });
 
 CustomInput.displayName = 'CustomInput';
+
+// Kill the browser's default white focus ring on web — the wrapper's
+// overflow:hidden clips it into two vertical bars beside the input.
+// (outline* props are web-only in react-native-web, hence the cast.)
+const NO_OUTLINE: TextStyle | undefined =
+  Platform.OS === 'web'
+    ? ({ outlineStyle: 'none', outlineWidth: 0 } as unknown as TextStyle)
+    : undefined;
 
 const styles = StyleSheet.create({
   container: {
@@ -156,7 +172,6 @@ const styles = StyleSheet.create({
     height: 2.5,
   },
   errorText: {
-    color: '#F43F5E',
     fontSize: 12,
     marginTop: 4,
     fontWeight: '600',

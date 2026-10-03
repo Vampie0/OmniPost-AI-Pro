@@ -1,67 +1,159 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
+import { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useAuthStore } from '@/store/useAuthStore';
 import { ScreenWrapper } from '@/components/templates/ScreenWrapper';
 import { GlassCard, Badge } from '@/components/atoms';
+import { supabase, isPlaceholderUrl } from '@/services/supabase';
 import {
   TrendingUp,
-  Sparkles,
   Zap,
   Award,
   BarChart3,
   Instagram,
   Twitter,
   Linkedin,
-  Video,
   ArrowUpRight,
   Clock,
-  Share2,
 } from 'lucide-react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 
-const { width } = Dimensions.get('window');
 
-const PLATFORM_METRICS = [
-  {
-    id: 'instagram',
-    name: 'Instagram Business',
-    reach: '78.4K',
-    growth: '+24%',
-    share: 55,
-    icon: (c: string) => <Instagram size={18} color={c} />,
-  },
-  {
-    id: 'twitter',
-    name: 'Twitter / X Feed',
-    reach: '42.1K',
-    growth: '+18%',
-    share: 30,
-    icon: (c: string) => <Twitter size={16} color={c} />,
-  },
-  {
-    id: 'linkedin',
-    name: 'LinkedIn Creator',
-    reach: '22.3K',
-    growth: '+12%',
-    share: 15,
-    icon: (c: string) => <Linkedin size={16} color={c} />,
-  },
-];
+
+interface LiveMetrics {
+  totalPosts: number;
+  publishedPosts: number;
+  scheduledPosts: number;
+  totalAiGenerations: number;
+  totalCreditsUsed: number;
+  platformCounts: Record<string, number>;
+  publicationRate: number;
+}
+
+const RANGE_DAYS: Record<'7d' | '30d' | '90d', number> = { '7d': 7, '30d': 30, '90d': 90 };
 
 export default function AnalyticsScreen() {
   const { theme } = useTheme();
   const user = useAuthStore((state) => state.user);
   const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d'>('30d');
+  const [refreshing, setRefreshing] = useState(false);
+  const [metrics, setMetrics] = useState<LiveMetrics>({
+    totalPosts: 0,
+    publishedPosts: 0,
+    scheduledPosts: 0,
+    totalAiGenerations: 0,
+    totalCreditsUsed: 0,
+    platformCounts: {},
+    publicationRate: 0,
+  });
+
+  const loadMetrics = useCallback(async () => {
+    if (isPlaceholderUrl || !user) return;
+
+    // Selected time range actually scopes every query below
+    const sinceIso = new Date(Date.now() - RANGE_DAYS[timeRange] * 86400000).toISOString();
+    const sinceDate = sinceIso.slice(0, 10); // analytics.date is a plain DATE column
+
+    try {
+      // Fetch user's posts for platform and status stats
+      const { data: posts } = await supabase
+        .from('posts')
+        .select('status, platforms, created_at')
+        .eq('user_id', user.id)
+        .gte('created_at', sinceIso);
+
+      // Fetch user's analytics for AI generation stats
+      const { data: analytics } = await supabase
+        .from('analytics')
+        .select('total_ai_generations, credits_used, date')
+        .eq('user_id', user.id)
+        .gte('date', sinceDate)
+        .order('date', { ascending: false });
+
+      const postList = posts || [];
+      const analyticsList = analytics || [];
+
+      // Count platforms
+      const platformCounts: Record<string, number> = {};
+      postList.forEach((p) => {
+        (p.platforms || []).forEach((plat: string) => {
+          platformCounts[plat] = (platformCounts[plat] || 0) + 1;
+        });
+      });
+
+      const totalAi = analyticsList.reduce((sum, a) => sum + (a.total_ai_generations || 0), 0);
+      const totalCredits = analyticsList.reduce((sum, a) => sum + (a.credits_used || 0), 0);
+      const published = postList.filter((p) => p.status === 'published').length;
+      const scheduled = postList.filter((p) => p.status === 'scheduled').length;
+      // Honest metric: share of created posts that actually went live
+      const publicationRate = postList.length > 0 ? Math.round((published / postList.length) * 1000) / 10 : 0;
+
+      setMetrics({
+        totalPosts: postList.length,
+        publishedPosts: published,
+        scheduledPosts: scheduled,
+        totalAiGenerations: totalAi,
+        totalCreditsUsed: totalCredits,
+        platformCounts,
+        publicationRate,
+      });
+    } catch {
+      // Silently fail - show zeros
+    }
+  }, [user, timeRange]);
+
+  useEffect(() => {
+    loadMetrics();
+  }, [loadMetrics]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadMetrics();
+    setRefreshing(false);
+  };
+
+  // Build live platform metrics from real data — post counts only;
+  // reach/impressions need connected platform accounts, so we never invent them
+  const totalPlatformPosts = Object.values(metrics.platformCounts).reduce((s, v) => s + v, 0) || 1;
+  const livePlatformMetrics = [
+    {
+      id: 'instagram',
+      name: 'Instagram Business',
+      reach: `${metrics.platformCounts['instagram'] || 0} posts`,
+      growth: '',
+      share: Math.round(((metrics.platformCounts['instagram'] || 0) / totalPlatformPosts) * 100),
+      icon: (c: string) => <Instagram size={18} color={c} />,
+    },
+    {
+      id: 'twitter',
+      name: 'Twitter / X Feed',
+      reach: `${metrics.platformCounts['twitter'] || 0} posts`,
+      growth: '',
+      share: Math.round(((metrics.platformCounts['twitter'] || 0) / totalPlatformPosts) * 100),
+      icon: (c: string) => <Twitter size={16} color={c} />,
+    },
+    {
+      id: 'linkedin',
+      name: 'LinkedIn Creator',
+      reach: `${metrics.platformCounts['linkedin'] || 0} posts`,
+      growth: '',
+      share: Math.round(((metrics.platformCounts['linkedin'] || 0) / totalPlatformPosts) * 100),
+      icon: (c: string) => <Linkedin size={16} color={c} />,
+    },
+  ];
 
   return (
-    <ScreenWrapper scrollable contentContainerStyle={styles.container}>
+    <ScreenWrapper scrollable={false}>
+      <ScrollView
+        contentContainerStyle={styles.container}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
+      >
       {/* 1. Header & Time Filter Range */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <Text style={[styles.title, { color: theme.colors.textPrimary }]}>Performance Insights</Text>
           <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
-            Real-time viral reach, cadence & distribution metrics
+            Post cadence & distribution metrics for the selected period
           </Text>
         </View>
 
@@ -101,26 +193,45 @@ export default function AnalyticsScreen() {
             </View>
             <View>
               <Text style={[styles.heroCardTitle, { color: theme.colors.textPrimary }]}>
-                Viral Probability Score
+                Publication Rate
               </Text>
               <Text style={[styles.heroCardSub, { color: theme.colors.textSecondary }]}>
-                Algorithm Distribution Health
+                Share of created posts that went live
               </Text>
             </View>
           </View>
-          <Badge label="OPTIMAL" variant="primary" />
+          <Badge
+            label={
+              isPlaceholderUrl
+                ? 'OPTIMAL'
+                : metrics.totalPosts === 0
+                  ? 'NO DATA'
+                  : metrics.publicationRate >= 80
+                    ? 'STRONG'
+                    : 'GROWING'
+            }
+            variant="primary"
+          />
         </View>
 
         <View style={styles.scoreRow}>
-          <Text style={[styles.scoreValue, { color: theme.colors.textPrimary }]}>94.8%</Text>
-          <View style={[styles.growthPill, { backgroundColor: 'rgba(0, 245, 160, 0.12)', borderColor: 'rgba(0, 245, 160, 0.3)' }]}>
-            <ArrowUpRight size={14} color="#00F5A0" />
-            <Text style={styles.growthPillText}>+18.4% vs last period</Text>
-          </View>
+          <Text style={[styles.scoreValue, { color: theme.colors.textPrimary }]}>{metrics.publicationRate}%</Text>
+          {isPlaceholderUrl ? (
+            <View style={[styles.growthPill, { backgroundColor: theme.colors.primary + '1F', borderColor: theme.colors.primary + '4D' }]}>
+              <ArrowUpRight size={14} color={theme.colors.primary} />
+              <Text style={[styles.growthPillText, { color: theme.colors.primary }]}>+18.4% vs last period</Text>
+            </View>
+          ) : metrics.totalPosts > 0 ? (
+            <View style={[styles.growthPill, { backgroundColor: theme.colors.primary + '1F', borderColor: theme.colors.primary + '4D' }]}>
+              <ArrowUpRight size={14} color={theme.colors.primary} />
+              <Text style={[styles.growthPillText, { color: theme.colors.primary }]}>{metrics.publishedPosts} of {metrics.totalPosts} published</Text>
+            </View>
+          ) : null}
         </View>
 
         <Text style={[styles.heroExplainer, { color: theme.colors.textMuted }]}>
-          Based on consistent posting cadence, multi-format hooks, and peak engagement scheduling slots.
+          Published posts divided by posts created in the selected period. Reach and engagement
+          metrics require connected platform accounts.
         </Text>
       </GlassCard>
 
@@ -131,9 +242,9 @@ export default function AnalyticsScreen() {
           <View style={[styles.bentoIconBox, { backgroundColor: theme.colors.badgeBg }]}>
             <TrendingUp size={16} color={theme.colors.primary} />
           </View>
-          <Text style={[styles.bentoValue, { color: theme.colors.textPrimary }]}>142.8K</Text>
-          <Text style={[styles.bentoLabel, { color: theme.colors.textSecondary }]}>Audience Reach</Text>
-          <Text style={[styles.bentoSubLabel, { color: theme.colors.primary }]}>+32% Organic</Text>
+          <Text style={[styles.bentoValue, { color: theme.colors.textPrimary }]}>{metrics.totalPosts}</Text>
+          <Text style={[styles.bentoLabel, { color: theme.colors.textSecondary }]}>Total Posts</Text>
+          <Text style={[styles.bentoSubLabel, { color: theme.colors.primary }]}>{metrics.publishedPosts} Published</Text>
         </GlassCard>
 
         {/* Tile 2 & 3: Hours Saved & Active Cadence (Right Stack) */}
@@ -143,9 +254,9 @@ export default function AnalyticsScreen() {
               <View style={[styles.bentoMiniIcon, { backgroundColor: theme.colors.badgeBg }]}>
                 <Clock size={13} color={theme.colors.primary} />
               </View>
-              <Text style={[styles.bentoSmallValue, { color: theme.colors.textPrimary }]}>38.5 hrs</Text>
+              <Text style={[styles.bentoSmallValue, { color: theme.colors.textPrimary }]}>{metrics.totalAiGenerations}</Text>
             </View>
-            <Text style={[styles.bentoSmallLabel, { color: theme.colors.textSecondary }]}>Time Saved by AI</Text>
+            <Text style={[styles.bentoSmallLabel, { color: theme.colors.textSecondary }]}>AI Generations</Text>
           </GlassCard>
 
           <GlassCard style={styles.bentoTileSmall}>
@@ -153,9 +264,9 @@ export default function AnalyticsScreen() {
               <View style={[styles.bentoMiniIcon, { backgroundColor: theme.colors.badgeBg }]}>
                 <Zap size={13} color={theme.colors.primary} />
               </View>
-              <Text style={[styles.bentoSmallValue, { color: theme.colors.textPrimary }]}>4.8 / wk</Text>
+              <Text style={[styles.bentoSmallValue, { color: theme.colors.textPrimary }]}>{metrics.totalCreditsUsed}</Text>
             </View>
-            <Text style={[styles.bentoSmallLabel, { color: theme.colors.textSecondary }]}>Posting Cadence</Text>
+            <Text style={[styles.bentoSmallLabel, { color: theme.colors.textSecondary }]}>Credits Used</Text>
           </GlassCard>
         </View>
       </View>
@@ -166,14 +277,14 @@ export default function AnalyticsScreen() {
           <View style={styles.platformHeaderLeft}>
             <BarChart3 size={17} color={theme.colors.primary} />
             <Text style={[styles.cardHeading, { color: theme.colors.textPrimary }]}>
-              Channel Distribution & Reach
+              Channel Distribution
             </Text>
           </View>
-          <Badge label="3 Active" variant="neutral" />
+          <Badge label={`${Object.keys(metrics.platformCounts).length} Active`} variant="neutral" />
         </View>
 
         <View style={styles.platformsList}>
-          {PLATFORM_METRICS.map((plat) => (
+          {livePlatformMetrics.map((plat) => (
             <View key={plat.id} style={styles.platformRowItem}>
               <View style={styles.platformInfoTop}>
                 <View style={styles.platformBrandGroup}>
@@ -185,7 +296,7 @@ export default function AnalyticsScreen() {
                       {plat.name}
                     </Text>
                     <Text style={[styles.platformReach, { color: theme.colors.textMuted }]}>
-                      {plat.reach} impressions
+                      {plat.reach}
                     </Text>
                   </View>
                 </View>
@@ -194,7 +305,9 @@ export default function AnalyticsScreen() {
                   <Text style={[styles.platformShare, { color: theme.colors.textPrimary }]}>
                     {plat.share}%
                   </Text>
-                  <Text style={styles.platformGrowthText}>{plat.growth}</Text>
+                  {plat.growth ? (
+                    <Text style={[styles.platformGrowthText, { color: theme.colors.primary }]}>{plat.growth}</Text>
+                  ) : null}
                 </View>
               </View>
 
@@ -214,6 +327,7 @@ export default function AnalyticsScreen() {
           ))}
         </View>
       </GlassCard>
+      </ScrollView>
     </ScreenWrapper>
   );
 }
@@ -311,7 +425,6 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   growthPillText: {
-    color: '#00F5A0',
     fontSize: 11,
     fontWeight: '800',
   },
@@ -443,7 +556,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   platformGrowthText: {
-    color: '#00F5A0',
     fontSize: 10.5,
     fontWeight: '800',
   },

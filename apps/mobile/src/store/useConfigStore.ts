@@ -21,11 +21,12 @@ export const useConfigStore = create<ConfigState>((set) => ({
 
     try {
       set({ isLoading: true });
+      // maybeSingle: an empty app_config table yields null instead of a 406/PGRST116 error
       const { data, error } = await supabase
         .from('app_config')
         .select('*')
         .limit(1)
-        .single();
+        .maybeSingle();
 
       if (data && !error) {
         set({ config: data as AppConfig, isLoading: false });
@@ -54,7 +55,11 @@ export const useConfigStore = create<ConfigState>((set) => ({
             }
           }
         )
-        .subscribe();
+        .subscribe(() => {
+          // Status intentionally unused: a no-op callback prevents channel
+          // failures from surfacing as unhandled rejections. One-shot
+          // fetchConfig() already covers cold starts.
+        });
 
       return () => {
         supabase.removeChannel(channel);

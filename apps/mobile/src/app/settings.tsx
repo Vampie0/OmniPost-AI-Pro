@@ -1,15 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
+import { goBackOr } from '@/utils/navigation';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useConfigStore } from '@/store/useConfigStore';
+import { useAuthStore } from '@/store/useAuthStore';
+import { supabase, isPlaceholderUrl } from '@/services/supabase';
 import { ScreenWrapper } from '@/components/templates/ScreenWrapper';
 import { GlassCard, Badge } from '@/components/atoms';
 import { CustomToggle } from '@/components/atoms/CustomToggle';
 import { useToast } from '@/components/atoms/CustomToast';
 import { LUXURY_PALETTES, PaletteKey } from '@socialpilot/tokens';
 import { APP_BRANDING } from '@/constants';
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from '@/utils/secureStorage';
+import * as ImagePicker from 'expo-image-picker';
+import { Image } from 'expo-image';
 import {
   ChevronLeft,
   Palette,
@@ -20,15 +25,132 @@ import {
   Shield,
   Check,
   ChevronRight,
+  Camera,
+  Trash2,
+  User,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+
+// Extract the storage object path from a public avatars URL so the old
+// object can be removed when the avatar is replaced or deleted.
+const avatarPathFromUrl = (url: string | null | undefined): string | null => {
+  if (!url) return null;
+  const marker = '/object/public/avatars/';
+  const idx = url.indexOf(marker);
+  if (idx === -1) return null;
+  const path = url.slice(idx + marker.length).split('?')[0];
+  return path ? decodeURIComponent(path) : null;
+};
 
 export default function SettingsScreen() {
   const router = useRouter();
   const { theme, paletteKey, setPalette, themeMode, setThemeMode } = useTheme();
   const { showToast } = useToast();
   const appConfig = useConfigStore((state) => state.config);
+  const user = useAuthStore((s) => s.user);
+  const fetchProfile = useAuthStore((s) => s.fetchProfile);
   const isNavigatingRef = React.useRef(false);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+
+  const displayName = user?.full_name || 'User';
+  const displayEmail = user?.email || '';
+  const avatarUri = user?.avatar_url || null;
+
+  const handlePickAvatar = async () => {
+    if (isPlaceholderUrl) {
+      showToast({ title: 'Not available in demo mode', type: 'info' });
+      return;
+    }
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert(
+        'Permission Required',
+        'Please allow access to your photo library to change your profile picture.',
+      );
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (result.canceled || !result.assets[0]) return;
+    const asset = result.assets[0];
+    setAvatarUploading(true);
+    try {
+      // Derive extension from the picker's MIME type (URIs like content:// have no dot)
+      const ext = (asset.mimeType?.split('/')[1] ?? 'jpg').replace(/[^a-z0-9]/g, '') || 'jpg';
+      const filePath = `${user!.id}/avatar.${ext}`;
+      const oldPath = avatarPathFromUrl(user?.avatar_url);
+      const resp = await fetch(asset.uri);
+      const blob = await resp.blob();
+      // Upload guard: only common image types, max 5 MB (storage policy
+      // additionally restricts uploads to the user's own folder).
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+      if (asset.mimeType && !allowedTypes.includes(asset.mimeType)) {
+        Alert.alert('Unsupported Image', 'Please choose a JPG, PNG or WEBP image.');
+        return;
+      }
+      if (blob.size > 5 * 1024 * 1024) {
+        Alert.alert('Photo Too Large', 'Please choose an image smaller than 5 MB.');
+        return;
+      }
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, blob, { upsert: true, contentType: asset.mimeType || 'image/jpeg' });
+      if (uploadError) throw uploadError;
+      const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(filePath);
+      const publicUrl = urlData.publicUrl;
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ avatar_url: publicUrl })
+        .eq('id', user!.id);
+      if (updateError) throw updateError;
+      // Remove the previous object if the key changed (avatar.png → avatar.jpg)
+      if (oldPath && oldPath !== filePath) {
+        await supabase.storage.from('avatars').remove([oldPath]);
+      }
+      await fetchProfile(user!.id);
+      showToast({ title: 'Profile picture updated', type: 'info' });
+    } catch {
+      Alert.alert('Upload Failed', 'Could not upload your photo. Please try again.');
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
+  const handleRemoveAvatar = async () => {
+    if (isPlaceholderUrl) {
+      showToast({ title: 'Not available in demo mode', type: 'info' });
+      return;
+    }
+    Alert.alert('Remove Photo', 'Are you sure you want to remove your profile picture?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            const oldPath = avatarPathFromUrl(user?.avatar_url);
+            await supabase
+              .from('profiles')
+              .update({ avatar_url: null })
+              .eq('id', user!.id);
+            // Delete the stored object too — otherwise the photo stays
+            // publicly downloadable from the (public) avatars bucket.
+            if (oldPath) {
+              await supabase.storage.from('avatars').remove([oldPath]);
+            }
+            await fetchProfile(user!.id);
+            showToast({ title: 'Photo removed', type: 'info' });
+          } catch {
+            Alert.alert('Error', 'Could not remove photo.');
+          }
+        },
+      },
+    ]);
+  };
 
   const navigateSafe = (route: string) => {
     if (isNavigatingRef.current) return;
@@ -71,7 +193,7 @@ export default function SettingsScreen() {
     <ScreenWrapper scrollable contentContainerStyle={styles.container}>
       {/* Top Bar */}
       <TouchableOpacity
-        onPress={() => router.back()}
+        onPress={() => goBackOr(router)}
         style={[styles.backBtn, { backgroundColor: theme.colors.surfaceSubtle, borderColor: theme.colors.border }]}
       >
         <ChevronLeft size={20} color={theme.colors.textPrimary} />
@@ -84,7 +206,62 @@ export default function SettingsScreen() {
         </Text>
       </View>
 
-      {/* SECTION 1: 5 LUXURY THEME PALETTES */}
+      {/* SECTION 1: PROFILE */}
+      <GlassCard elevated style={styles.sectionCard}>
+        <View style={styles.profileContent}>
+          <View style={styles.avatarContainer}>
+            {avatarUri ? (
+              <Image
+                source={{ uri: avatarUri }}
+                style={styles.avatar}
+                contentFit="cover"
+                transition={200}
+              />
+            ) : (
+              <View style={[styles.avatar, styles.avatarPlaceholder, { backgroundColor: theme.colors.badgeBg }]}>
+                <User size={32} color={theme.colors.primary} />
+              </View>
+            )}
+            {avatarUploading && (
+              <View style={styles.avatarOverlay}>
+                <ActivityIndicator size="small" color={theme.colors.primary} />
+              </View>
+            )}
+          </View>
+          <Text style={[styles.profileName, { color: theme.colors.textPrimary }]}>{displayName}</Text>
+          {displayEmail ? (
+            <Text style={[styles.profileEmail, { color: theme.colors.textSecondary }]}>{displayEmail}</Text>
+          ) : null}
+          <View style={styles.profileBtnRow}>
+            <TouchableOpacity
+              onPress={handlePickAvatar}
+              disabled={avatarUploading}
+              style={[styles.profileBtn, { backgroundColor: theme.colors.primary }]}
+            >
+              <Camera size={14} color={theme.colors.btnTextColor} />
+              <Text style={[styles.profileBtnText, { color: theme.colors.btnTextColor }]}>
+                {avatarUploading ? 'Uploading…' : 'Change Photo'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={handleRemoveAvatar}
+              disabled={avatarUploading || !avatarUri}
+              style={[
+                styles.profileBtnOutline,
+                { borderColor: theme.colors.border },
+                (!avatarUri || avatarUploading) && { opacity: 0.4 },
+              ]}
+            >
+              <Trash2 size={14} color={theme.colors.textSecondary} />
+              <Text style={[styles.profileBtnOutlineText, { color: theme.colors.textSecondary }]}>
+                Remove
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </GlassCard>
+
+      {/* SECTION 2: 5 LUXURY THEME PALETTES */}
       <GlassCard elevated style={styles.sectionCard}>
         <View style={styles.sectionHeadingRow}>
           <View style={[styles.iconBox, { backgroundColor: theme.colors.badgeBg }]}>
@@ -126,7 +303,7 @@ export default function SettingsScreen() {
                     end={{ x: 1, y: 1 }}
                     style={styles.paletteCircle}
                   >
-                    {isSelected && <Check size={10} color={pal.dark.btnTextColor} />}
+                    {isSelected && <Check size={10} color={theme.colors.btnTextColor} />}
                   </LinearGradient>
                   <Text
                     style={[
@@ -162,7 +339,7 @@ export default function SettingsScreen() {
             ]}
           >
             <Moon size={14} color={themeMode === 'dark' ? theme.colors.btnTextColor : theme.colors.textSecondary} />
-            <Text style={[styles.themePillText, { color: themeMode === 'dark' ? theme.colors.btnTextColor : theme.colors.textPrimary }]}>
+            <Text style={[styles.themePillText, { color: themeMode === 'dark' ? theme.colors.btnTextColor : theme.colors.textSecondary }]}>
               Dark
             </Text>
           </TouchableOpacity>
@@ -175,7 +352,7 @@ export default function SettingsScreen() {
             ]}
           >
             <Sun size={14} color={themeMode === 'light' ? theme.colors.btnTextColor : theme.colors.textSecondary} />
-            <Text style={[styles.themePillText, { color: themeMode === 'light' ? theme.colors.btnTextColor : theme.colors.textPrimary }]}>
+            <Text style={[styles.themePillText, { color: themeMode === 'light' ? theme.colors.btnTextColor : theme.colors.textSecondary }]}>
               Light
             </Text>
           </TouchableOpacity>
@@ -273,7 +450,10 @@ export default function SettingsScreen() {
               <Text style={[styles.navRowTitle, { color: theme.colors.textPrimary }]}>
                 Security & Password
               </Text>
-              <Text style={[styles.navRowSubtitle, { color: theme.colors.textSecondary }]}>
+              <Text
+                style={[styles.navRowSubtitle, { color: theme.colors.textSecondary }]}
+                numberOfLines={2}
+              >
                 Change account password & security credentials
               </Text>
             </View>
@@ -290,7 +470,9 @@ export default function SettingsScreen() {
         </View>
         <View style={styles.aboutRow}>
           <Text style={[styles.aboutLabel, { color: theme.colors.textSecondary }]}>Support</Text>
-          <Text style={[styles.aboutValue, { color: theme.colors.primary }]}>{APP_BRANDING.supportEmail}</Text>
+          <Text style={[styles.aboutValue, { color: theme.colors.primary }]}>
+            {appConfig?.support_email || APP_BRANDING.supportEmail}
+          </Text>
         </View>
       </GlassCard>
     </ScreenWrapper>
@@ -299,7 +481,7 @@ export default function SettingsScreen() {
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingVertical: 18,
     gap: 16,
   },
@@ -365,6 +547,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    flex: 1,
   },
   paletteCircle: {
     width: 18,
@@ -438,6 +621,7 @@ const styles = StyleSheet.create({
   navRowSubtitle: {
     fontSize: 11.5,
     marginTop: 2,
+    flexShrink: 1,
   },
   aboutCard: {
     padding: 16,
@@ -445,16 +629,85 @@ const styles = StyleSheet.create({
     gap: 10,
     marginBottom: 20,
   },
+  profileContent: {
+    alignItems: 'center',
+    gap: 10,
+  },
+  avatarContainer: {
+    position: 'relative',
+    marginBottom: 2,
+  },
+  avatar: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+  },
+  avatarPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    borderRadius: 44,
+  },
+  profileName: {
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  profileEmail: {
+    fontSize: 12.5,
+    marginTop: -4,
+  },
+  profileBtnRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 4,
+  },
+  profileBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 12,
+  },
+  profileBtnText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+  },
+  profileBtnOutline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  profileBtnOutlineText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+  },
   aboutRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 12,
   },
   aboutLabel: {
     fontSize: 13,
+    flexShrink: 0,
   },
   aboutValue: {
     fontSize: 13,
     fontWeight: '700',
+    flexShrink: 1,
   },
 });

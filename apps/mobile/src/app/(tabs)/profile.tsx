@@ -1,28 +1,25 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { useSafePress } from '@/hooks/useSafePress';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useAuthStore } from '@/store/useAuthStore';
 import { ScreenWrapper } from '@/components/templates/ScreenWrapper';
-import { GlassCard, AnimatedButton, Badge } from '@/components/atoms';
+import { GlassCard, Badge } from '@/components/atoms';
 import {
   User,
   Zap,
   Crown,
   ChevronRight,
   Edit3,
-  Sparkles,
-  ShieldCheck,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { safePress } = useSafePress();
   const { theme } = useTheme();
   const { user } = useAuthStore();
-  const isNavigatingRef = React.useRef(false);
+  const isNavigatingRef = useRef(false);
 
   const navigateSafe = (route: string) => {
     if (isNavigatingRef.current) return;
@@ -41,19 +38,23 @@ export default function ProfileScreen() {
 
       {/* 1. Creator Identity Card */}
       <GlassCard elevated style={styles.profileCard}>
-        <View style={[styles.avatar, { backgroundColor: theme.colors.badgeBg }]}>
-          <User size={36} color={theme.colors.primary} />
-        </View>
+        {user?.avatar_url ? (
+          <Image source={{ uri: user.avatar_url }} style={styles.avatarImage} />
+        ) : (
+          <View style={[styles.avatar, { backgroundColor: theme.colors.badgeBg }]}>
+            <User size={36} color={theme.colors.primary} />
+          </View>
+        )}
         <Text style={[styles.userName, { color: theme.colors.textPrimary }]}>
-          {user?.full_name || 'Alex Rivera'}
+          {user?.full_name || 'Creator'}
         </Text>
         <Text style={[styles.userEmail, { color: theme.colors.textSecondary }]}>
-          {user?.email || 'alex@company.com'}
+          {user?.email || ''}
         </Text>
 
         <View style={styles.tierBadge}>
           <Badge
-            label={user?.role === 'super_admin' ? 'Super Admin' : user?.role === 'admin' ? 'Admin' : 'Pro VIP Plan'}
+            label={user?.role === 'super_admin' ? 'Super Admin' : user?.role === 'admin' ? 'Admin' : `${(user?.subscription_tier || 'free').charAt(0).toUpperCase()}${(user?.subscription_tier || 'free').slice(1)} Plan`}
             variant="primary"
           />
         </View>
@@ -79,7 +80,7 @@ export default function ProfileScreen() {
             </View>
             <View>
               <Text style={[styles.creditsTitle, { color: theme.colors.textPrimary }]}>AI Generation Credits</Text>
-              <Text style={[styles.creditsSub, { color: theme.colors.textMuted }]}>Refills in 12 days</Text>
+              <Text style={[styles.creditsSub, { color: theme.colors.textMuted }]}>Credits are deducted per generation</Text>
             </View>
           </View>
           <Text style={[styles.creditsRemaining, { color: theme.colors.primary }]}>
@@ -156,6 +157,12 @@ const styles = StyleSheet.create({
     borderRadius: 36,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 12,
+  },
+  avatarImage: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     marginBottom: 12,
   },
   userName: {

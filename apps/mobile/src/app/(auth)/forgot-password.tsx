@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
+import { goBackOr } from '@/utils/navigation';
 import { useSafePress } from '@/hooks/useSafePress';
 import { useTheme } from '@/theme/ThemeProvider';
 import { ScreenWrapper } from '@/components/templates/ScreenWrapper';
@@ -45,7 +46,17 @@ export default function ForgotPasswordScreen() {
         return;
       }
 
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim());
+      // Web: send the recovery redirect back to this app's own origin so the
+      // update-password screen receives the recovery session. (Native falls
+      // back to the project Site URL configured in Supabase.)
+      const redirectTo =
+        Platform.OS === 'web' && typeof window !== 'undefined'
+          ? window.location.origin
+          : undefined;
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(
+        email.trim(),
+        redirectTo ? { redirectTo } : undefined
+      );
 
       if (resetError) {
         showToast({ title: 'Reset Failed', message: resetError.message, type: 'error' });
@@ -63,7 +74,7 @@ export default function ForgotPasswordScreen() {
   return (
     <ScreenWrapper scrollable contentContainerStyle={styles.scrollContent}>
       <TouchableOpacity
-        onPress={() => safePress(() => router.back())}
+        onPress={() => safePress(() => goBackOr(router, '/login'))}
         style={[styles.backBtn, { backgroundColor: theme.colors.surfaceSubtle, borderColor: theme.colors.border }]}
       >
         <ChevronLeft size={20} color={theme.colors.textPrimary} />
@@ -100,6 +111,8 @@ export default function ForgotPasswordScreen() {
               placeholder="alex@company.com"
               keyboardType="email-address"
               autoCapitalize="none"
+              autoComplete="off"
+              textContentType="none"
               value={email}
               onChangeText={setEmail}
               error={error}

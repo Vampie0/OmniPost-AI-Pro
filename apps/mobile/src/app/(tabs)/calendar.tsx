@@ -1,25 +1,27 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafePress } from '@/hooks/useSafePress';
 import { useTheme } from '@/theme/ThemeProvider';
+import { statusColors, withAlpha } from '@/theme/statusColors';
+import { EmptyStateCard } from '@/components/atoms/EmptyStateCard';
+import { useAuthStore } from '@/store/useAuthStore';
 import { ScreenWrapper } from '@/components/templates/ScreenWrapper';
-import { GlassCard, AnimatedButton, Badge } from '@/components/atoms';
+import { GlassCard } from '@/components/atoms';
 import { useToast } from '@/components/atoms/CustomToast';
+import { supabase, isPlaceholderUrl } from '@/services/supabase';
 import {
   Calendar as CalendarIcon,
   Clock,
   Plus,
   Trash2,
   Edit3,
-  Sparkles,
   Share2,
   Instagram,
   Twitter,
   Linkedin,
   Video,
 } from 'lucide-react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 
 interface ScheduledItem {
   id: string;
@@ -30,40 +32,8 @@ interface ScheduledItem {
   dayOffset: number;
 }
 
-const SCHEDULED_POSTS: ScheduledItem[] = [
-  {
-    id: '1',
-    title: 'Viral Reel Hook: 5 Morning Routines',
-    content: 'Why 90% of creators fail with morning routines (and how to build a 7-figure system). Step-by-step breakdown.',
-    platforms: ['instagram', 'tiktok'],
-    time: '10:00 AM',
-    dayOffset: 0,
-  },
-  {
-    id: '2',
-    title: 'LinkedIn Thought Leadership Breakdown',
-    content: 'Why modern SaaS founders are switching from manual marketing to autonomous AI distribution engines.',
-    platforms: ['linkedin'],
-    time: '02:30 PM',
-    dayOffset: 0,
-  },
-  {
-    id: '3',
-    title: '5-Tweet Viral Thread: Growth Secrets',
-    content: '1/ Consistency beats motivation every single time. 2/ Automate the tedious distribution workflows...',
-    platforms: ['twitter'],
-    time: '07:15 PM',
-    dayOffset: 1,
-  },
-  {
-    id: '4',
-    title: 'Product Announcement & Feature Teaser',
-    content: 'Exclusive sneak peek into our upcoming autonomous AI scheduler. What features are you most excited for?',
-    platforms: ['instagram', 'facebook'],
-    time: '11:30 AM',
-    dayOffset: 2,
-  },
-];
+// Fallback data when not connected
+const FALLBACK_SCHEDULED_POSTS: ScheduledItem[] = [];
 
 const PLATFORM_ICONS: Record<string, (c: string) => React.ReactNode> = {
   instagram: (c) => <Instagram size={14} color={c} />,
@@ -77,11 +47,62 @@ export default function CalendarScreen() {
   const router = useRouter();
   const { safePress } = useSafePress();
   const { theme } = useTheme();
+  const status = statusColors(theme.isDark);
   const { showToast } = useToast();
+  const user = useAuthStore((state) => state.user);
 
   const [selectedDayOffset, setSelectedDayOffset] = useState(0);
   const [selectedPlatformFilter, setSelectedPlatformFilter] = useState('all');
-  const [posts, setPosts] = useState<ScheduledItem[]>(SCHEDULED_POSTS);
+  const [posts, setPosts] = useState<ScheduledItem[]>(FALLBACK_SCHEDULED_POSTS);
+
+  const loadScheduledPosts = useCallback(async () => {
+    if (isPlaceholderUrl || !user) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('posts')
+        .select('id, title, content, platforms, scheduled_at, status')
+        .eq('user_id', user.id)
+        .in('status', ['scheduled', 'draft'])
+        .order('scheduled_at', { ascending: true });
+
+      if (error || !data) return;
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const mapped: ScheduledItem[] = data
+        .filter((p) => p.scheduled_at)
+        .map((p) => {
+          const schedDate = new Date(p.scheduled_at!);
+          schedDate.setHours(0, 0, 0, 0);
+          const diffMs = schedDate.getTime() - today.getTime();
+          const dayOffset = Math.round(diffMs / (1000 * 60 * 60 * 24));
+          const timeStr = new Date(p.scheduled_at!).toLocaleTimeString('en-US', {
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true,
+          });
+          return {
+            id: p.id,
+            title: p.title || 'Untitled Post',
+            content: p.content,
+            platforms: p.platforms || [],
+            time: timeStr,
+            dayOffset: Math.max(0, dayOffset),
+          };
+        })
+        .filter((p) => p.dayOffset < 7);
+
+      setPosts(mapped);
+    } catch {
+      // Silent fail
+    }
+  }, [user]);
+
+  useEffect(() => {
+    loadScheduledPosts();
+  }, [loadScheduledPosts]);
 
   // Generate 7-day calendar strip
   const days = Array.from({ length: 7 }).map((_, i) => {
@@ -140,7 +161,8 @@ export default function CalendarScreen() {
 
       {/* 2. Interactive Weekly Calendar Strip */}
       <View style={styles.calendarStripContainer}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.daysRow}>
+        {/* flexGrow 0: keep the row content-sized (RN-Web ScrollView defaults to flex:1) */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={styles.daysRow}>
           {days.map((item) => {
             const isSelected = selectedDayOffset === item.offset;
             return (
@@ -188,7 +210,7 @@ export default function CalendarScreen() {
                       backgroundColor: item.hasPosts
                         ? isSelected
                           ? theme.colors.primary
-                          : '#00F5A0'
+                          : theme.colors.secondaryGradient[0]
                         : 'transparent',
                     },
                   ]}
@@ -241,13 +263,12 @@ export default function CalendarScreen() {
         </View>
 
         {activeDayPosts.length === 0 ? (
-          <GlassCard style={styles.emptyTimelineCard}>
-            <CalendarIcon size={38} color={theme.colors.textMuted} style={{ marginBottom: 10 }} />
-            <Text style={[styles.emptyTitle, { color: theme.colors.textPrimary }]}>No posts scheduled for this day</Text>
-            <Text style={[styles.emptySubtitle, { color: theme.colors.textSecondary }]}>
-              Tap the (+ New Post) button above to plan your content for this slot.
-            </Text>
-          </GlassCard>
+          <EmptyStateCard
+            icon={CalendarIcon}
+            title="No posts scheduled for this day"
+            subtitle="Tap the (+ New Post) button above to plan your content for this slot."
+            style={styles.emptyTimelineCard}
+          />
         ) : (
           <View style={styles.timelineList}>
             {activeDayPosts.map((post, idx) => (
@@ -288,9 +309,9 @@ export default function CalendarScreen() {
 
                         <TouchableOpacity
                           onPress={() => safePress(() => handleDelete(post.id))}
-                          style={[styles.actionIconBtn, { backgroundColor: 'rgba(244, 63, 94, 0.12)' }]}
+                          style={[styles.actionIconBtn, { backgroundColor: withAlpha(status.danger, 0.12) }]}
                         >
-                          <Trash2 size={13} color="#F43F5E" />
+                          <Trash2 size={13} color={status.danger} />
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -304,7 +325,7 @@ export default function CalendarScreen() {
                     </Text>
 
                     {/* Platform Icons Footers */}
-                    <View style={styles.postBottomRow}>
+                    <View style={[styles.postBottomRow, { borderTopColor: theme.colors.border }]}>
                       <View style={styles.platformIconsGroup}>
                         {post.platforms.map((plat) => (
                           <View
@@ -537,7 +558,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.05)',
   },
   platformIconsGroup: {
     flexDirection: 'row',

@@ -48,7 +48,7 @@ export const GlassCard: React.FC<GlassCardProps> = memo(({
       style={[
         styles.card,
         {
-          backgroundColor: theme.colors.cardGlass,
+          backgroundColor: theme.isDark ? theme.colors.cardGlass : 'transparent',
           borderColor: theme.colors.cardGlassBorder,
         },
         elevated && styles.shadow,
@@ -67,7 +67,6 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: 20,
     borderWidth: 1,
-    padding: 18,
     overflow: 'hidden',
   },
   shadow: {
@@ -75,6 +74,5 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.25,
     shadowRadius: 16,
-    elevation: 8,
   },
 });

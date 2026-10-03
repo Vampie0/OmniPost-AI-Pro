@@ -13,18 +13,16 @@ export const Badge: React.FC<BadgeProps> = memo(({ label, variant = 'primary', s
 
   const getStyles = () => {
     switch (variant) {
-      case 'secondary':
-        return {
-          bg: theme.isDark ? 'rgba(0, 245, 160, 0.12)' : 'rgba(5, 150, 105, 0.12)',
-          border: theme.isDark ? 'rgba(0, 245, 160, 0.3)' : 'rgba(5, 150, 105, 0.3)',
-          text: theme.isDark ? '#00F5A0' : '#059669',
-        };
-      case 'accent':
-        return {
-          bg: 'rgba(244, 63, 94, 0.12)',
-          border: 'rgba(244, 63, 94, 0.3)',
-          text: '#F43F5E',
-        };
+      // Status accents are pulled from the palette's own gradient stops so they
+      // re-tint with the palette and mode instead of being pinned to one scheme.
+      case 'secondary': {
+        const c = theme.colors.secondaryGradient[0];
+        return { bg: `${c}1F`, border: `${c}4D`, text: c };
+      }
+      case 'accent': {
+        const c = theme.colors.accentGradient[0];
+        return { bg: `${c}1F`, border: `${c}4D`, text: c };
+      }
       case 'neutral':
         return {
           bg: theme.colors.surfaceSubtle,

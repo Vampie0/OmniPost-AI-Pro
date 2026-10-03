@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
+import { goBackOr } from '@/utils/navigation';
 import { useTheme } from '@/theme/ThemeProvider';
 import { ScreenWrapper } from '@/components/templates/ScreenWrapper';
 import { AnimatedButton, CustomInput, GlassCard } from '@/components/atoms';
@@ -93,7 +94,7 @@ export default function RegisterScreen() {
 
   return (
     <ScreenWrapper scrollable contentContainerStyle={styles.scrollContent}>
-      <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+      <TouchableOpacity onPress={() => goBackOr(router, '/login')} style={[styles.backButton, { backgroundColor: theme.colors.surfaceSubtle }]}>
         <ChevronLeft size={22} color={theme.colors.textPrimary} />
       </TouchableOpacity>
 
@@ -128,7 +129,7 @@ export default function RegisterScreen() {
         <CustomInput
           label="Password (min 8 chars)"
           placeholder="••••••••"
-          secureTextEntry
+          isPassword
           value={password}
           onChangeText={setPassword}
           error={errors.password}
@@ -140,7 +141,7 @@ export default function RegisterScreen() {
           onPress={handleRegister}
           loading={isLoading}
           size="lg"
-          icon={<Sparkles size={18} color="#FFFFFF" />}
+          icon={<Sparkles size={18} color={theme.colors.btnTextColor} />}
           style={styles.submitButton}
         />
       </GlassCard>
@@ -168,7 +169,6 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(30, 41, 59, 0.4)',
     marginBottom: 16,
   },
   header: {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,10 +13,11 @@ import {
 import { useRouter } from 'expo-router';
 import { useSafePress } from '@/hooks/useSafePress';
 import { useTheme } from '@/theme/ThemeProvider';
+import { EmptyStateCard } from '@/components/atoms/EmptyStateCard';
 import { ScreenWrapper } from '@/components/templates/ScreenWrapper';
 import { GlassCard, AnimatedButton, CustomInput, Badge } from '@/components/atoms';
 import { useToast } from '@/components/atoms/CustomToast';
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from '@/utils/secureStorage';
 import {
   ChevronLeft,
   Plus,
@@ -35,30 +36,6 @@ interface NoteItem {
   updatedAt: string;
 }
 
-const DEFAULT_NOTES: NoteItem[] = [
-  {
-    id: '1',
-    title: '5 Morning Habits Hook',
-    content: 'Why most creators burn out in month 2: They optimize for motivation instead of daily systems.',
-    tag: 'Hooks',
-    updatedAt: 'Today',
-  },
-  {
-    id: '2',
-    title: 'Q3 Product Launch Angles',
-    content: 'Angle 1: Save 10 hours a week on social media. Angle 2: Autonomous multi-platform distribution.',
-    tag: 'Launch',
-    updatedAt: 'Yesterday',
-  },
-  {
-    id: '3',
-    title: 'AI Copywriting Framework Notes',
-    content: 'PAS framework (Problem, Agitate, Solution) works 3x better than standard educational bullet points.',
-    tag: 'Strategy',
-    updatedAt: '3 days ago',
-  },
-];
-
 const TAGS = ['All', 'Hooks', 'Launch', 'Strategy', 'Reels'];
 
 export default function NotesScreen() {
@@ -67,7 +44,7 @@ export default function NotesScreen() {
   const { theme } = useTheme();
   const { showToast } = useToast();
 
-  const [notes, setNotes] = useState<NoteItem[]>(DEFAULT_NOTES);
+  const [notes, setNotes] = useState<NoteItem[]>([]);
   const [search, setSearch] = useState('');
   const [selectedTag, setSelectedTag] = useState('All');
 
@@ -124,10 +101,11 @@ export default function NotesScreen() {
     showToast({ title: 'Note Deleted', type: 'info' });
   };
 
-  // Send to AI Studio
+  // Send to AI Studio — the note text is handed to the generator via the
+  // `note` param and pre-fills its prompt box (see (tabs)/generate.tsx)
   const handleSendToAIStudio = (content: string) => {
-    showToast({ title: 'Exported to AI Studio', message: 'Opening generator canvas...', type: 'success' });
-    router.push('/(tabs)/generate');
+    router.push({ pathname: '/(tabs)/generate', params: { note: content } });
+    showToast({ title: 'Exported to AI Studio', message: 'Note loaded into the generator prompt.', type: 'success' });
   };
 
   const filteredNotes = notes.filter((n) => {
@@ -143,7 +121,17 @@ export default function NotesScreen() {
       {/* Top Navigation */}
       <View style={styles.topNav}>
         <TouchableOpacity
-          onPress={() => safePress(() => router.back())}
+          onPress={() =>
+            safePress(() => {
+              // Direct URL loads / refreshes leave the stack with no previous
+              // route — GO_BACK would then throw; fall back to the workspace
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.replace('/(tabs)');
+              }
+            })
+          }
           style={[styles.backBtn, { backgroundColor: theme.colors.surfaceSubtle, borderColor: theme.colors.border }]}
         >
           <ChevronLeft size={20} color={theme.colors.textPrimary} />
@@ -179,7 +167,7 @@ export default function NotesScreen() {
       </View>
 
       {/* Tag Filters */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tagsRow}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tagsScroll} contentContainerStyle={styles.tagsRow}>
         {TAGS.map((tag) => {
           const isSelected = selectedTag === tag;
           return (
@@ -213,13 +201,12 @@ export default function NotesScreen() {
       {/* Notes Grid */}
       <View style={styles.notesList}>
         {filteredNotes.length === 0 ? (
-          <GlassCard style={styles.emptyCard}>
-            <StickyNote size={36} color={theme.colors.textMuted} style={{ marginBottom: 10 }} />
-            <Text style={[styles.emptyTitle, { color: theme.colors.textPrimary }]}>No notes found</Text>
-            <Text style={[styles.emptySubtitle, { color: theme.colors.textSecondary }]}>
-              Tap the (+) button at the top to create your first idea note.
-            </Text>
-          </GlassCard>
+          <EmptyStateCard
+            icon={StickyNote}
+            title="No notes found"
+            subtitle="Tap the (+) button at the top to create your first idea note."
+            style={styles.emptyCard}
+          />
         ) : (
           filteredNotes.map((note) => (
             <GlassCard key={note.id} elevated style={styles.noteCard}>
@@ -234,7 +221,7 @@ export default function NotesScreen() {
                     <Text style={[styles.aiExpandText, { color: theme.colors.primary }]}>Expand with AI</Text>
                   </TouchableOpacity>
                   <TouchableOpacity onPress={() => safePress(() => handleDeleteNote(note.id))} style={styles.deleteBtn}>
-                    <Trash2 size={15} color="#F43F5E" />
+                    <Trash2 size={15} color={theme.colors.primary} />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -310,7 +297,7 @@ export default function NotesScreen() {
           Category Tag
         </Text>
 
-        <View style={styles.tagsRow}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tagsScroll} contentContainerStyle={styles.modalTagsRow}>
           {TAGS.filter((t) => t !== 'All').map((t) => (
             <TouchableOpacity
               key={t}
@@ -341,7 +328,7 @@ export default function NotesScreen() {
               </Text>
             </TouchableOpacity>
           ))}
-        </View>
+        </ScrollView>
 
         <AnimatedButton
           title="Save Note to Scratchpad"
@@ -411,10 +398,22 @@ const styles = StyleSheet.create({
     fontSize: 14,
     height: '100%',
   },
+  tagsScroll: {
+    // react-native-web gives ScrollView flex:1 by default; inside the
+    // screen's column layout that steals leftover height and stretches the
+    // pills into tall rectangles. Keep it content-sized.
+    flexGrow: 0,
+  },
   tagsRow: {
     flexDirection: 'row',
     gap: 8,
     paddingVertical: 2,
+  },
+  modalTagsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingVertical: 2,
+    paddingHorizontal: 2,
   },
   tagPill: {
     paddingHorizontal: 14,
@@ -495,16 +494,11 @@ const styles = StyleSheet.create({
 modalSheet: {
   width: '100%',
   maxWidth: 420,
-  maxHeight: '80%',          // thoda zyada space
+  maxHeight: '80%',
   borderRadius: 24,
   borderWidth: 1.2,
   padding: 20,
-  paddingBottom: 12,         // bottom padding kam
-  shadowColor: '#000000',
-  shadowOffset: { width: 0, height: 16 },
-  shadowOpacity: 0.5,
-  shadowRadius: 24,
-  elevation: 20,
+  paddingBottom: 12,
 },
 modalHeader: {
   flexDirection: 'row',

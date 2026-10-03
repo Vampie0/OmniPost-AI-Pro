@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, LayoutChangeEvent, Dimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafePress } from '@/hooks/useSafePress';
@@ -22,6 +22,23 @@ import Animated, {
 import { z } from 'zod';
 
 const { width } = Dimensions.get('window');
+
+// Turn raw Supabase/fetch errors into an actionable, accurate message.
+const friendlyAuthError = (raw: string): string => {
+  if (/failed to fetch|network|load failed|err_/i.test(raw)) {
+    return "Can't reach the Supabase server from this browser. Check your internet/VPN, and disable any ad-blocker or privacy extension that may be blocking supabase.co requests — then try again.";
+  }
+  if (/invalid login credentials/i.test(raw)) {
+    return 'Incorrect email or password.';
+  }
+  if (/email not confirmed/i.test(raw)) {
+    return 'Email is not verified yet. Check your inbox to confirm, then sign in.';
+  }
+  if (/rate limit|too many requests/i.test(raw)) {
+    return 'Too many attempts. Wait a minute and retry.';
+  }
+  return raw;
+};
 
 const authSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
@@ -111,7 +128,7 @@ export default function AuthScreen() {
         });
 
         if (error) {
-          showToast({ title: 'Sign In Notice', message: error.message, type: 'error' });
+          showToast({ title: 'Sign In Notice', message: friendlyAuthError(error.message), type: 'error' });
         } else {
           showToast({ title: 'Welcome Back!', message: 'Launching workspace...', type: 'success' });
           router.replace('/(tabs)');
@@ -126,7 +143,7 @@ export default function AuthScreen() {
         });
 
         if (error) {
-          showToast({ title: 'Sign Up Notice', message: error.message, type: 'error' });
+          showToast({ title: 'Sign Up Notice', message: friendlyAuthError(error.message), type: 'error' });
         } else if (data.session) {
           showToast({ title: 'Account Initialized!', message: 'Entering studio...', type: 'success' });
           router.replace('/(tabs)');
@@ -134,8 +151,12 @@ export default function AuthScreen() {
           showToast({ title: 'Verification Required', message: 'Check your email inbox to verify.', type: 'info' });
         }
       }
-    } catch {
-      showToast({ title: 'Connection Error', message: 'Unable to reach backend server.', type: 'error' });
+    } catch (e) {
+      showToast({
+        title: 'Connection Error',
+        message: friendlyAuthError(e instanceof Error ? e.message : String(e)),
+        type: 'error',
+      });
     } finally {
       setIsLoading(false);
     }
@@ -249,6 +270,8 @@ export default function AuthScreen() {
               value={fullName}
               onChangeText={setFullName}
               error={errors.fullName}
+              autoComplete="off"
+              textContentType="none"
               leftIcon={<User size={18} color={theme.colors.primary} />}
             />
           )}
@@ -258,6 +281,8 @@ export default function AuthScreen() {
             placeholder="alex@company.com"
             keyboardType="email-address"
             autoCapitalize="none"
+            autoComplete="off"
+            textContentType="none"
             value={email}
             onChangeText={setEmail}
             error={errors.email}
@@ -268,6 +293,8 @@ export default function AuthScreen() {
             label="Password"
             placeholder="••••••••••••"
             isPassword
+            autoComplete="new-password"
+            textContentType="none"
             value={password}
             onChangeText={setPassword}
             error={errors.password}

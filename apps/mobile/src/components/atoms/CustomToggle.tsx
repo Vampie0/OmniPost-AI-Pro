@@ -6,7 +6,9 @@ import Animated, {
   withSpring,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/theme/ThemeProvider';
+import { withAlpha } from '@/theme/statusColors';
 
 interface CustomToggleProps {
   value: boolean;
@@ -41,7 +43,10 @@ export const CustomToggle: React.FC<CustomToggleProps> = ({
     <TouchableOpacity
       activeOpacity={0.85}
       disabled={disabled}
-      onPress={() => onValueChange(!value)}
+      onPress={() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+        onValueChange(!value);
+      }}
       style={[
         styles.track,
         {
@@ -65,13 +70,15 @@ export const CustomToggle: React.FC<CustomToggleProps> = ({
         style={[
           styles.thumb,
           {
-            backgroundColor: value ? theme.colors.btnTextColor : '#94A3B8',
+            backgroundColor: value ? theme.colors.btnTextColor : theme.colors.textMuted,
           },
           animatedThumb,
         ]}
       >
-        {/* Subtle center specular dot */}
-        <View style={styles.thumbCenterDot} />
+        {/* Contrasts the thumb in both modes — white-on-white in stealth light. */}
+        <View
+          style={[styles.thumbCenterDot, { backgroundColor: withAlpha(theme.colors.background, 0.35) }]}
+        />
       </Animated.View>
     </TouchableOpacity>
   );
@@ -103,6 +110,5 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: 'rgba(255, 255, 255, 0.4)',
   },
 });

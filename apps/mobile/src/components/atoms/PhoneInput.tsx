@@ -46,7 +46,7 @@ export const PhoneInput: React.FC<PhoneInputProps> = ({
   label = 'Phone Number',
   value,
   onChangeText,
-  selectedCountry = COUNTRIES[0],
+  selectedCountry = COUNTRIES[0]!,
   onSelectCountry,
   error,
 }) => {
@@ -81,7 +81,7 @@ export const PhoneInput: React.FC<PhoneInputProps> = ({
           styles.inputWrapper,
           {
             backgroundColor: theme.colors.inputBg,
-            borderColor: error ? '#F43F5E' : theme.colors.border,
+            borderColor: error ? theme.colors.primary : theme.colors.border,
           },
         ]}
       >
@@ -109,7 +109,7 @@ export const PhoneInput: React.FC<PhoneInputProps> = ({
         />
       </View>
 
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      {error ? <Text style={[styles.errorText, { color: theme.colors.primary }]}>{error}</Text> : null}
 
       {/* Country Selection Modal with statusBarTranslucent for Android */}
       <Modal
@@ -235,7 +235,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   errorText: {
-    color: '#F43F5E',
     fontSize: 12,
     marginTop: 4,
     fontWeight: '600',

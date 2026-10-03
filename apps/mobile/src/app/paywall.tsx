@@ -1,22 +1,21 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform } from 'react-native';
+import { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
+import { goBackOr } from '@/utils/navigation';
 import { useSafePress } from '@/hooks/useSafePress';
 import { useTheme } from '@/theme/ThemeProvider';
 import { ScreenWrapper } from '@/components/templates/ScreenWrapper';
-import { GlassCard, AnimatedButton, CustomInput, Badge } from '@/components/atoms';
+import { GlassCard, AnimatedButton, CustomInput } from '@/components/atoms';
 import { useToast } from '@/components/atoms/CustomToast';
-import { isPlaceholderUrl } from '@/services/supabase';
+import { useAuthStore } from '@/store/useAuthStore';
+import { supabase, isPlaceholderUrl } from '@/services/supabase';
 import {
   Crown,
   CheckCircle2,
   X,
-  Sparkles,
   CreditCard,
   Lock,
-  Check,
 } from 'lucide-react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 
 const PLANS = [
   {
@@ -61,6 +60,7 @@ export default function PaywallScreen() {
   const { safePress } = useSafePress();
   const { theme } = useTheme();
   const { showToast } = useToast();
+  const { user } = useAuthStore();
 
   const [selectedPlan, setSelectedPlan] = useState('yearly');
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethodType>('card');
@@ -86,7 +86,7 @@ export default function PaywallScreen() {
     }
   };
 
-  const currentPlan = PLANS.find((p) => p.id === selectedPlan) || PLANS[0];
+  const currentPlan = PLANS.find((p) => p.id === selectedPlan) || PLANS[0]!;
 
   const handleSubscribe = async () => {
     if (selectedMethod === 'card') {
@@ -105,15 +105,54 @@ export default function PaywallScreen() {
     }
 
     setIsProcessing(true);
-    await new Promise((resolve) => setTimeout(resolve, 800));
-    setIsProcessing(false);
+    try {
+      if (isPlaceholderUrl || !user) {
+        await new Promise((resolve) => setTimeout(resolve, 800));
+        setIsProcessing(false);
+        showToast({
+          title: 'VIP Studio Unlocked!',
+          message: `Payment of ${currentPlan.price} processed successfully via ${selectedMethod.toUpperCase()}.`,
+          type: 'success',
+        });
+        goBackOr(router);
+        return;
+      }
 
-    showToast({
-      title: 'VIP Studio Unlocked!',
-      message: `Payment of ${currentPlan.price} processed successfully via ${selectedMethod.toUpperCase()}.`,
-      type: 'success',
-    });
-    router.back();
+      // Real mode: persist the activation to Supabase (payments themselves are
+      // simulated in this template — no PSP is wired; the DB record is real).
+      const periodDays = currentPlan.id === 'yearly' ? 365 : 30;
+      const periodEnd = new Date(Date.now() + periodDays * 86400000);
+      const { error: subError } = await supabase
+        .from('subscriptions')
+        .insert({
+          user_id: user.id,
+          tier: 'pro',
+          status: 'active',
+          current_period_end: periodEnd.toISOString(),
+        })
+        .select('id');
+      if (subError) throw subError;
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({ subscription_tier: 'pro' })
+        .eq('id', user.id);
+      if (profileError) throw profileError;
+
+      setIsProcessing(false);
+      showToast({
+        title: 'Plan Activated!',
+        message: `${currentPlan.name} is active until ${periodEnd.toLocaleDateString()}.`,
+        type: 'success',
+      });
+      goBackOr(router);
+    } catch (err) {
+      setIsProcessing(false);
+      showToast({
+        title: 'Subscription Failed',
+        message: err instanceof Error ? err.message : 'Please try again.',
+        type: 'error',
+      });
+    }
   };
 
   return (
@@ -121,7 +160,7 @@ export default function PaywallScreen() {
       {/* Top Dismiss Button */}
       <View style={styles.topNav}>
         <TouchableOpacity
-          onPress={() => safePress(() => router.back())}
+          onPress={() => safePress(() => goBackOr(router))}
           style={[styles.closeBtn, { backgroundColor: theme.colors.surfaceSubtle, borderColor: theme.colors.border }]}
         >
           <X size={20} color={theme.colors.textPrimary} />

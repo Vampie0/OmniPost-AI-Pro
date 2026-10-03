@@ -39,7 +39,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 const DRAWER_WIDTH = Math.min(320, width * 0.82);
 
 export const CustomStudioDrawer: React.FC = () => {
@@ -93,7 +93,7 @@ export const CustomStudioDrawer: React.FC = () => {
 
   return (
     <View
-      style={[StyleSheet.absoluteFillObject, { zIndex: 9999999 }]}
+      style={[StyleSheet.absoluteFill, { zIndex: 9999999 }]}
       pointerEvents={isOpen ? 'auto' : 'none'}
     >
       {/* 1. Backdrop (Tap to Close) */}
@@ -116,7 +116,7 @@ export const CustomStudioDrawer: React.FC = () => {
         ]}
       >
         {/* Top Workspace Header */}
-        <View style={styles.drawerHeader}>
+        <View style={[styles.drawerHeader, { borderBottomColor: theme.colors.border }]}>
           <View style={styles.headerBrandRow}>
             <LinearGradient
               colors={[...theme.colors.primaryGradient]}
@@ -149,7 +149,7 @@ export const CustomStudioDrawer: React.FC = () => {
             <TouchableOpacity
               onPress={() => navigateTo('/team')}
               activeOpacity={0.75}
-              style={[styles.navItem, { backgroundColor: theme.colors.surfaceSubtle }]}
+              style={styles.navItem}
             >
               <View style={styles.navItemLeft}>
                 <View style={[styles.navIconBox, { backgroundColor: theme.colors.badgeBg }]}>
@@ -165,7 +165,7 @@ export const CustomStudioDrawer: React.FC = () => {
             <TouchableOpacity
               onPress={() => navigateTo('/history')}
               activeOpacity={0.75}
-              style={[styles.navItem, { backgroundColor: theme.colors.surfaceSubtle }]}
+              style={styles.navItem}
             >
               <View style={styles.navItemLeft}>
                 <View style={[styles.navIconBox, { backgroundColor: theme.colors.badgeBg }]}>
@@ -181,7 +181,7 @@ export const CustomStudioDrawer: React.FC = () => {
             <TouchableOpacity
               onPress={() => navigateTo('/connected-accounts')}
               activeOpacity={0.75}
-              style={[styles.navItem, { backgroundColor: theme.colors.surfaceSubtle }]}
+              style={styles.navItem}
             >
               <View style={styles.navItemLeft}>
                 <View style={[styles.navIconBox, { backgroundColor: theme.colors.badgeBg }]}>
@@ -197,7 +197,7 @@ export const CustomStudioDrawer: React.FC = () => {
             <TouchableOpacity
               onPress={() => navigateTo('/security')}
               activeOpacity={0.75}
-              style={[styles.navItem, { backgroundColor: theme.colors.surfaceSubtle }]}
+              style={styles.navItem}
             >
               <View style={[styles.navIconBox, { backgroundColor: theme.colors.badgeBg }]}>
                 <Shield size={16} color={theme.colors.primary} />
@@ -211,7 +211,7 @@ export const CustomStudioDrawer: React.FC = () => {
             <TouchableOpacity
               onPress={() => navigateTo('/notification-settings')}
               activeOpacity={0.75}
-              style={[styles.navItem, { backgroundColor: theme.colors.surfaceSubtle }]}
+              style={styles.navItem}
             >
               <View style={[styles.navIconBox, { backgroundColor: theme.colors.badgeBg }]}>
                 <Bell size={16} color={theme.colors.primary} />
@@ -254,7 +254,7 @@ export const CustomStudioDrawer: React.FC = () => {
                       end={{ x: 1, y: 1 }}
                       style={styles.paletteCircle}
                     >
-                      {isSelected && <Check size={10} color={pal.dark.btnTextColor} />}
+                      {isSelected && <Check size={10} color={theme.colors.btnTextColor} />}
                     </LinearGradient>
                     <Text
                       style={[
@@ -324,8 +324,8 @@ export const CustomStudioDrawer: React.FC = () => {
         {/* Drawer Footer: Sign Out */}
         <View style={[styles.drawerFooter, { borderTopColor: theme.colors.border }]}>
           <TouchableOpacity onPress={handleSignOut} style={styles.signOutBtn}>
-            <LogOut size={16} color="#F43F5E" />
-            <Text style={styles.signOutText}>Sign Out of Studio</Text>
+            <LogOut size={16} color={theme.colors.textSecondary} />
+            <Text style={[styles.signOutText, { color: theme.colors.textSecondary }]}>Sign Out of Studio</Text>
           </TouchableOpacity>
         </View>
       </Animated.View>
@@ -335,7 +335,7 @@ export const CustomStudioDrawer: React.FC = () => {
 
 const styles = StyleSheet.create({
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0, 0, 0, 0.75)',
   },
   drawerContainer: {
@@ -359,7 +359,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     paddingBottom: 14,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
+    borderBottomColor: 'transparent',
   },
   headerBrandRow: {
     flexDirection: 'row',
@@ -485,7 +485,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   signOutText: {
-    color: '#F43F5E',
     fontSize: 13,
     fontWeight: '700',
   },

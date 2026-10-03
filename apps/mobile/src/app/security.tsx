@@ -1,13 +1,14 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
+import { goBackOr } from '@/utils/navigation';
 import { useSafePress } from '@/hooks/useSafePress';
 import { useTheme } from '@/theme/ThemeProvider';
 import { ScreenWrapper } from '@/components/templates/ScreenWrapper';
 import { GlassCard, AnimatedButton, CustomInput, Badge } from '@/components/atoms';
 import { useToast } from '@/components/atoms/CustomToast';
 import { supabase, isPlaceholderUrl } from '@/services/supabase';
-import { ChevronLeft, Lock, ShieldCheck, KeyRound, AlertTriangle } from 'lucide-react-native';
+import { ChevronLeft, Lock, ShieldCheck, KeyRound } from 'lucide-react-native';
 
 export default function SecurityScreen() {
   const router = useRouter();
@@ -37,7 +38,7 @@ export default function SecurityScreen() {
       if (isPlaceholderUrl) {
         await new Promise((resolve) => setTimeout(resolve, 500));
         showToast({ title: 'Security Updated!', message: 'Your password has been changed.', type: 'success' });
-        router.back();
+        goBackOr(router);
         return;
       }
 
@@ -49,7 +50,7 @@ export default function SecurityScreen() {
         showToast({ title: 'Update Failed', message: error.message, type: 'error' });
       } else {
         showToast({ title: 'Password Changed!', message: 'Security credentials updated.', type: 'success' });
-        router.back();
+        goBackOr(router);
       }
     } catch {
       showToast({ title: 'Connection Error', message: 'Could not reach security server.', type: 'error' });
@@ -61,7 +62,7 @@ export default function SecurityScreen() {
   return (
     <ScreenWrapper scrollable contentContainerStyle={styles.container}>
       <TouchableOpacity
-        onPress={() => safePress(() => router.back())}
+        onPress={() => safePress(() => goBackOr(router))}
         style={[styles.backBtn, { backgroundColor: theme.colors.surfaceSubtle, borderColor: theme.colors.border }]}
       >
         <ChevronLeft size={20} color={theme.colors.textPrimary} />
@@ -70,7 +71,7 @@ export default function SecurityScreen() {
       <View style={styles.header}>
         <Text style={[styles.title, { color: theme.colors.textPrimary }]}>Security & Password</Text>
         <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
-          Manage your account credentials, password security, and active sessions
+          Manage your account credentials and password security
         </Text>
       </View>
 
@@ -83,7 +84,7 @@ export default function SecurityScreen() {
           <Badge label="RLS Active" variant="primary" />
         </View>
         <Text style={[styles.statusHeading, { color: theme.colors.textPrimary }]}>
-          Row-Level Encryption Active
+          Row-Level Security (RLS) Active
         </Text>
         <Text style={[styles.statusDesc, { color: theme.colors.textSecondary }]}>
           Your creator assets and credentials are protected by PostgreSQL row-level isolation policies.

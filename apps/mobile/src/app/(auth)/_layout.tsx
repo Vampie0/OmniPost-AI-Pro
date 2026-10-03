@@ -1,4 +1,3 @@
-import React from 'react';
 import { Stack } from 'expo-router';
 import { useTheme } from '@/theme/ThemeProvider';
 
@@ -17,6 +16,7 @@ export default function AuthLayout() {
       <Stack.Screen name="login" />
       <Stack.Screen name="register" />
       <Stack.Screen name="forgot-password" />
+      <Stack.Screen name="update-password" />
     </Stack>
   );
 }
