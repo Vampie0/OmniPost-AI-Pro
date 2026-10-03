@@ -435,6 +435,12 @@ CREATE POLICY "analytics_update_own" ON public.analytics
 CREATE POLICY "ai_logs_select_own" ON public.ai_logs
     FOR SELECT TO authenticated USING (auth.uid() = user_id);
 
+-- generate-content writes the audit row under the caller's JWT, so own-insert
+-- is required or History is permanently empty on a fresh project.
+-- Mirrors migrations/20240001000003_backend_sync.sql
+CREATE POLICY "ai_logs_insert_own" ON public.ai_logs
+    FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id);
+
 -- ── Admin Audit Logs: Admin only ──
 CREATE POLICY "admin_audit_logs_admin_only" ON public.admin_audit_logs
     FOR ALL TO authenticated USING (public.is_admin());
