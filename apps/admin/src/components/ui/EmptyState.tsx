@@ -1,5 +1,6 @@
 import React from 'react';
 import { LucideIcon, Inbox } from 'lucide-react';
+import { Button } from './Button';
 
 interface EmptyStateProps {
   title?: string;
@@ -30,12 +31,9 @@ export function EmptyState({
         {description}
       </p>
       {actionLabel && onAction && (
-        <button
-          onClick={onAction}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-primary text-btn-text rounded-xl font-bold text-xs shadow-md shadow-glow/20 hover:opacity-95 transition"
-        >
+        <Button size="sm" onClick={onAction}>
           {actionLabel}
-        </button>
+        </Button>
       )}
     </div>
   );
