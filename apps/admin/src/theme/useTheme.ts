@@ -35,7 +35,7 @@ export const useThemeStore = create<ThemeState>()(
       setPalette: (key) => {
         const { mode, systemIsDark } = get();
         const isDark = computeIsDark(mode, systemIsDark);
-        set({ paletteKey: key, colors: resolveColors(key, isDark) });
+        set({ paletteKey: key, isDark, colors: resolveColors(key, isDark) });
       },
 
       setMode: (mode) => {
@@ -60,6 +60,27 @@ export const useThemeStore = create<ThemeState>()(
         paletteKey: state.paletteKey,
         mode: state.mode,
       }),
+      // `colors` and `isDark` are derived values that live in state so
+      // ThemeProvider can read them without recomputing. Rehydration restores
+      // only the two persisted keys, so the derived pair has to be recomputed
+      // here — otherwise every reload comes back locked to the seeded
+      // sunset/dark pair no matter which palette was chosen.
+      merge: (persisted, current) => {
+        const saved = (persisted ?? {}) as Partial<{
+          paletteKey: PaletteKey;
+          mode: ThemeMode;
+        }>;
+        const paletteKey = saved.paletteKey ?? current.paletteKey;
+        const mode = saved.mode ?? current.mode;
+        const isDark = computeIsDark(mode, current.systemIsDark);
+        return {
+          ...current,
+          paletteKey,
+          mode,
+          isDark,
+          colors: resolveColors(paletteKey, isDark),
+        };
+      },
     },
   ),
 );

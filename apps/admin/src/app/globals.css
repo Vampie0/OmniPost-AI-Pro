@@ -7,9 +7,11 @@
 
   /* ── Semantic status colors (mode-adaptive, overridden by ThemeProvider) ── */
   --color-success: #059669;
+  --color-success-5: rgba(5, 150, 105, 0.05);
   --color-success-10: rgba(5, 150, 105, 0.1);
   --color-success-20: rgba(5, 150, 105, 0.2);
   --color-success-30: rgba(5, 150, 105, 0.3);
+  --color-success-40: rgba(5, 150, 105, 0.4);
 
   --color-warning: #D97706;
   --color-warning-10: rgba(217, 119, 6, 0.1);
@@ -17,18 +19,22 @@
   --color-warning-30: rgba(217, 119, 6, 0.3);
 
   --color-danger: #E11D48;
+  --color-danger-5: rgba(225, 29, 72, 0.05);
   --color-danger-10: rgba(225, 29, 72, 0.1);
   --color-danger-20: rgba(225, 29, 72, 0.2);
   --color-danger-30: rgba(225, 29, 72, 0.3);
+  --color-danger-40: rgba(225, 29, 72, 0.4);
   --color-danger-80: rgba(225, 29, 72, 0.8);
 }
 
 /* Dark mode status colors (brighter for dark backgrounds) */
 .dark {
   --color-success: #00F5A0;
+  --color-success-5: rgba(0, 245, 160, 0.05);
   --color-success-10: rgba(0, 245, 160, 0.1);
   --color-success-20: rgba(0, 245, 160, 0.2);
   --color-success-30: rgba(0, 245, 160, 0.3);
+  --color-success-40: rgba(0, 245, 160, 0.4);
 
   --color-warning: #FFAE00;
   --color-warning-10: rgba(255, 174, 0, 0.1);
@@ -36,21 +42,55 @@
   --color-warning-30: rgba(255, 174, 0, 0.3);
 
   --color-danger: #FF385C;
+  --color-danger-5: rgba(255, 56, 92, 0.05);
   --color-danger-10: rgba(255, 56, 92, 0.1);
   --color-danger-20: rgba(255, 56, 92, 0.2);
   --color-danger-30: rgba(255, 56, 92, 0.3);
+  --color-danger-40: rgba(255, 56, 92, 0.4);
   --color-danger-80: rgba(255, 56, 92, 0.8);
 }
 
-/* Alpha variants — derived from theme CSS vars via color-mix (works with any palette) */
+/*
+ * Alpha variants — derived from theme CSS vars via color-mix (works with any palette).
+ *
+ * Tailwind v3 cannot decompose a `var()` colour, so the `/70` opacity shorthand is a
+ * no-op against these tokens. Every translucent surface has to be spelled out here and
+ * registered in tailwind.config.ts, then used as e.g. `bg-surface-subtle-70`.
+ */
 :root,
 .dark {
   --color-primary-10: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  --color-primary-15: color-mix(in srgb, var(--color-primary) 15%, transparent);
+  --color-primary-20: color-mix(in srgb, var(--color-primary) 20%, transparent);
+  --color-primary-30: color-mix(in srgb, var(--color-primary) 30%, transparent);
+  --color-primary-60: color-mix(in srgb, var(--color-primary) 60%, transparent);
+
+  --color-border-active-15: color-mix(in srgb, var(--color-border-active) 15%, transparent);
+  --color-border-active-20: color-mix(in srgb, var(--color-border-active) 20%, transparent);
   --color-border-active-30: color-mix(in srgb, var(--color-border-active) 30%, transparent);
   --color-border-active-50: color-mix(in srgb, var(--color-border-active) 50%, transparent);
+
+  --color-surface-50: color-mix(in srgb, var(--color-surface) 50%, transparent);
+  --color-surface-80: color-mix(in srgb, var(--color-surface) 80%, transparent);
+  --color-surface-90: color-mix(in srgb, var(--color-surface) 90%, transparent);
+
   --color-surface-subtle-30: color-mix(in srgb, var(--color-surface-subtle) 30%, transparent);
+  --color-surface-subtle-40: color-mix(in srgb, var(--color-surface-subtle) 40%, transparent);
   --color-surface-subtle-50: color-mix(in srgb, var(--color-surface-subtle) 50%, transparent);
   --color-surface-subtle-60: color-mix(in srgb, var(--color-surface-subtle) 60%, transparent);
+  --color-surface-subtle-70: color-mix(in srgb, var(--color-surface-subtle) 70%, transparent);
+  --color-surface-subtle-80: color-mix(in srgb, var(--color-surface-subtle) 80%, transparent);
+
+  --color-border-40: color-mix(in srgb, var(--color-border) 40%, transparent);
+  --color-border-50: color-mix(in srgb, var(--color-border) 50%, transparent);
+  --color-border-60: color-mix(in srgb, var(--color-border) 60%, transparent);
+  --color-border-80: color-mix(in srgb, var(--color-border) 80%, transparent);
+
+  --color-text-muted-30: color-mix(in srgb, var(--color-text-muted) 30%, transparent);
+
+  --color-glow-10: color-mix(in srgb, var(--color-glow) 10%, transparent);
+  --color-glow-20: color-mix(in srgb, var(--color-glow) 20%, transparent);
+  --color-glow-25: color-mix(in srgb, var(--color-glow) 25%, transparent);
   --color-glow-30: color-mix(in srgb, var(--color-glow) 30%, transparent);
 }
 
@@ -91,5 +131,109 @@ body {
     border: 1px solid var(--color-border, rgba(0, 0, 0, 0.08));
     border-radius: 2rem;
     backdrop-filter: blur(24px);
+  }
+}
+
+/* ── Motion identity ─────────────────────────────────────────────────────
+ * Easings are shared so every surface settles with the same character.
+ * Durations live in tailwind.config.ts alongside the animation utilities.
+ */
+:root {
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out-quint: cubic-bezier(0.83, 0, 0.17, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+@keyframes sheen {
+  0% { transform: translateX(-120%) skewX(-18deg); opacity: 0; }
+  25% { opacity: 0.55; }
+  100% { transform: translateX(220%) skewX(-18deg); opacity: 0; }
+}
+
+@keyframes aurora-a {
+  0%   { transform: translate3d(-8%, -4%, 0) scale(1); }
+  50%  { transform: translate3d(10%, 6%, 0) scale(1.18); }
+  100% { transform: translate3d(-8%, -4%, 0) scale(1); }
+}
+
+@keyframes aurora-b {
+  0%   { transform: translate3d(6%, 8%, 0) scale(1.1); }
+  50%  { transform: translate3d(-9%, -6%, 0) scale(0.94); }
+  100% { transform: translate3d(6%, 8%, 0) scale(1.1); }
+}
+
+@keyframes float-y {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes glow-pulse {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
+}
+
+@keyframes gradient-pan {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+
+@keyframes spin-slow {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes ping-soft {
+  0% { transform: scale(1); opacity: 0.7; }
+  70%, 100% { transform: scale(2.1); opacity: 0; }
+}
+
+/*
+ * The palette gradients are single-pass, so panning them needs an oversized
+ * background. Applied to elements that opt into `animate-gradient-pan`.
+ */
+.gradient-pan-surface {
+  background-size: 200% 200%;
+}
+
+/*
+ * Sweep band for skeletons and hover sheens. Uses the palette's own text colour so
+ * it stays visible in light mode, where a white band would disappear.
+ */
+.sheen-band {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--color-text-primary) 9%, transparent) 50%,
+    transparent 100%
+  );
+}
+
+/*
+ * Motion is decorative here — the theme switch and every entrance still have to
+ * leave the underlying state readable for users who opt out.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
