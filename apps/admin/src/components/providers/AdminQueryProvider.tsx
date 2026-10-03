@@ -21,9 +21,11 @@ export function AdminQueryProvider({ children }: { children: React.ReactNode }) 
               Math.min(1000 * 2 ** attemptIndex, 30000),
             staleTime: 1000 * 60 * 5,
             refetchOnWindowFocus: true,
+            networkMode: 'offlineFirst',
           },
           mutations: {
             retry: 1,
+            networkMode: 'offlineFirst',
           },
         },
       })

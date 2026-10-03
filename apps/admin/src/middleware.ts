@@ -15,7 +15,9 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/white-label') ||
     pathname.startsWith('/ai-settings') ||
     pathname.startsWith('/notifications') ||
-    pathname.startsWith('/settings');
+    pathname.startsWith('/settings') ||
+    pathname.startsWith('/test-connection') ||
+    pathname.startsWith('/api');
 
   const isAuthPath = pathname.startsWith('/login');
 
@@ -50,12 +52,28 @@ export async function middleware(request: NextRequest) {
     },
   });
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Fast path: verify the JWT locally against the cached JWKS — this avoids a
+  // GoTrue network round-trip on every navigation (main source of admin slowness).
+  let userId: string | null = null;
+  const { data: claimsData } = await supabase.auth.getClaims();
+  const sub = claimsData?.claims?.sub;
+  if (typeof sub === 'string') {
+    userId = sub;
+  } else {
+    // Slow path validates remotely and refreshes expired tokens; refreshed
+    // cookies are attached to the response through the setAll handler above.
+    const { data: userData } = await supabase.auth.getUser();
+    userId = userData.user?.id ?? null;
+  }
 
   if (isProtectedPath) {
-    if (!user) {
+    const isApiRoute = pathname.startsWith('/api');
+
+    if (!userId) {
+      // API routes must get JSON status codes, not an HTML redirect
+      if (isApiRoute) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
       const loginUrl = new URL('/login', request.url);
       loginUrl.searchParams.set('redirect', pathname);
       return NextResponse.redirect(loginUrl);
@@ -64,21 +82,23 @@ export async function middleware(request: NextRequest) {
     const { data: profile } = await supabase
       .from('profiles')
       .select('role, is_suspended')
-      .eq('id', user.id)
+      .eq('id', userId)
       .single();
 
     if (!profile || (profile.role !== 'admin' && profile.role !== 'super_admin') || profile.is_suspended) {
-      const loginUrl = new URL('/login', request.url);
-      loginUrl.searchParams.set('error', 'unauthorized');
-      return NextResponse.redirect(loginUrl);
+      if (isApiRoute) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+      const unauthorizedUrl = new URL('/unauthorized', request.url);
+      return NextResponse.redirect(unauthorizedUrl);
     }
   }
 
-  if (isAuthPath && user) {
+  if (isAuthPath && userId) {
     const { data: profile } = await supabase
       .from('profiles')
       .select('role, is_suspended')
-      .eq('id', user.id)
+      .eq('id', userId)
       .single();
 
     if (profile && (profile.role === 'admin' || profile.role === 'super_admin') && !profile.is_suspended) {

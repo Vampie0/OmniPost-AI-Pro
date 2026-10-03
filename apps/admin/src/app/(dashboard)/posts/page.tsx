@@ -25,7 +25,6 @@ import {
   ChevronRight,
   Flag,
   Share2,
-  X,
   Instagram,
   Twitter,
   Linkedin,
@@ -38,6 +37,8 @@ import { PostItem, PlatformType, PostStatus } from '@socialpilot/types';
 import { exportToCsv } from '@/lib/csv';
 import { TableSkeleton } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Button } from '@/components/ui/Button';
+import { Drawer, DrawerSection } from '@/components/ui/Drawer';
 
 const MOCK_POSTS: PostItem[] = [
   {
@@ -437,7 +438,7 @@ export default function PostsModerationPage() {
           </button>
           <button
             onClick={handleExportCsv}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-primary text-btn-text text-xs font-bold shadow-md shadow-glow/20 hover:opacity-95 transition"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-primary text-btn-text text-xs font-bold shadow-md shadow-glow-20 hover:opacity-95 transition"
           >
             <Download className="w-3.5 h-3.5" />
             <span>Export CSV</span>
@@ -507,7 +508,7 @@ export default function PostsModerationPage() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="border-b border-border bg-surface-subtle/70">
+              <thead className="border-b border-border bg-surface-subtle-70">
                 {table.getHeaderGroups().map((headerGroup) => (
                   <tr key={headerGroup.id}>
                     {headerGroup.headers.map((header) => (
@@ -523,9 +524,9 @@ export default function PostsModerationPage() {
                   </tr>
                 ))}
               </thead>
-              <tbody className="divide-y divide-border/60">
+              <tbody className="divide-y divide-border-60">
                 {table.getRowModel().rows.map((row) => (
-                  <tr key={row.id} className="hover:bg-surface-subtle/40 transition">
+                  <tr key={row.id} className="hover:bg-surface-subtle-40 transition">
                     {row.getVisibleCells().map((cell) => (
                       <td key={cell.id} className="px-6 py-4">
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -565,53 +566,61 @@ export default function PostsModerationPage() {
         )}
       </div>
 
-      {/* Post Details Inspection Modal */}
-      {selectedPost && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="glass-panel rounded-3xl p-6 sm:p-8 max-w-xl w-full shadow-2xl border border-border space-y-5 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-border">
-              <div className="flex items-center gap-2">
-                <FileText className="w-5 h-5 text-primary" />
-                <h2 className="text-base font-bold text-text-primary">Post Moderation Inspector</h2>
-              </div>
-              <button
-                onClick={() => setSelectedPost(null)}
-                className="p-1 rounded-lg text-text-muted hover:text-text-primary"
+      {/* Post Moderation Inspector — a record to read, so it gets a detail panel */}
+      <Drawer
+        open={!!selectedPost}
+        onClose={() => setSelectedPost(null)}
+        eyebrow="Content Moderation"
+        title={selectedPost?.title || 'Untitled Post'}
+        subtitle={selectedPost ? `Status: ${selectedPost.status}` : undefined}
+        avatar={
+          <div className="w-11 h-11 rounded-xl bg-primary-10 border border-primary-30 flex items-center justify-center text-primary shrink-0">
+            <FileText className="w-5 h-5" />
+          </div>
+        }
+        footer={
+          selectedPost && (
+            <>
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={() => handleDeletePost(selectedPost.id)}
               >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
+                <Trash2 className="w-3.5 h-3.5" />
+                Delete Post
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => handleToggleFlag(selectedPost)}
+                className="text-warning bg-warning-10 border-warning-30 hover:bg-warning-20"
+              >
+                <Flag className="w-3.5 h-3.5" />
+                {selectedPost.status === 'failed' ? 'Unflag Post' : 'Flag as Suspicious'}
+              </Button>
+            </>
+          )
+        }
+      >
+        {selectedPost && (
+          <>
             {selectedPost.media_urls?.[0] && (
               <img
                 src={selectedPost.media_urls[0]}
-                alt="Media"
-                className="w-full h-56 rounded-2xl object-cover border border-border shadow-sm"
+                alt="Post media"
+                className="w-full h-56 rounded-2xl object-cover border border-border shadow-card"
               />
             )}
 
-            <div>
-              <span className="text-xs font-bold uppercase tracking-wider text-text-muted">Title</span>
-              <h3 className="text-base font-extrabold text-text-primary mt-0.5">
-                {selectedPost.title || 'Untitled Post'}
-              </h3>
-            </div>
-
-            <div>
-              <span className="text-xs font-bold uppercase tracking-wider text-text-muted">
-                Post Copy
-              </span>
-              <p className="text-sm text-text-secondary bg-surface-subtle/70 p-4 rounded-xl border border-border mt-1 whitespace-pre-wrap leading-relaxed">
+            <DrawerSection label="Post Copy">
+              <p className="px-4 py-3.5 text-sm text-text-secondary bg-surface-subtle-70 whitespace-pre-wrap leading-relaxed">
                 {selectedPost.content}
               </p>
-            </div>
+            </DrawerSection>
 
             {selectedPost.hashtags?.length > 0 && (
-              <div>
-                <span className="text-xs font-bold uppercase tracking-wider text-text-muted">
-                  Hashtags
-                </span>
-                <div className="flex flex-wrap gap-1.5 mt-1">
+              <DrawerSection label="Hashtags">
+                <div className="flex flex-wrap gap-1.5 p-4">
                   {selectedPost.hashtags.map((tag, idx) => (
                     <span
                       key={idx}
@@ -621,39 +630,23 @@ export default function PostsModerationPage() {
                     </span>
                   ))}
                 </div>
-              </div>
+              </DrawerSection>
             )}
 
             {selectedPost.error_message && (
-              <div className="p-3.5 rounded-xl bg-danger-10/40 border border-danger-30 text-danger text-xs flex items-start gap-2">
-                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                <div>
-                  <span className="font-bold">Moderation Error / Flag Notice:</span>
-                  <p className="mt-0.5">{selectedPost.error_message}</p>
+              <DrawerSection label="Enforcement">
+                <div className="p-4 flex items-start gap-2 text-danger text-xs">
+                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold">Moderation Error / Flag Notice:</span>
+                    <p className="mt-0.5 leading-relaxed">{selectedPost.error_message}</p>
+                  </div>
                 </div>
-              </div>
+              </DrawerSection>
             )}
-
-            <div className="flex items-center justify-between pt-3 border-t border-border">
-              <button
-                onClick={() => handleDeletePost(selectedPost.id)}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-danger bg-danger-10 border border-danger-30 hover:bg-danger-20 transition"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Delete Post</span>
-              </button>
-
-              <button
-                onClick={() => handleToggleFlag(selectedPost)}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-warning bg-warning-10 border border-warning-30 hover:bg-warning-20 transition"
-              >
-                <Flag className="w-3.5 h-3.5" />
-                <span>{selectedPost.status === 'failed' ? 'Unflag Post' : 'Flag as Suspicious'}</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </Drawer>
     </div>
   );
 }

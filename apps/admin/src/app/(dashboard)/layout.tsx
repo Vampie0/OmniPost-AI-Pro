@@ -8,6 +8,9 @@ import { AdminSidebar } from '@/components/layout/AdminSidebar';
 import { AdminHeader } from '@/components/layout/AdminHeader';
 import { CosmicSocialSplash } from '@/components/ui/CosmicSocialSplash';
 import { PageTransition } from '@/components/ui/PageTransition';
+import { CommandPalette } from '@/components/ui/CommandPalette';
+import { Breadcrumbs } from '@/components/ui/Breadcrumbs';
+import { AuroraBackground } from '@/components/ui/AuroraBackground';
 
 export default function DashboardLayout({
   children,
@@ -19,38 +22,44 @@ export default function DashboardLayout({
   const [showSplash, setShowSplash] = useState(true);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [isPaletteOpen, setIsPaletteOpen] = useState(false);
 
   useEffect(() => {
     async function checkAdminAuth() {
-      if (isPlaceholderUrl) {
+      try {
+        if (isPlaceholderUrl) {
+          setIsAuthenticated(true);
+          return;
+        }
+
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (!session) {
+          router.replace('/login');
+          return;
+        }
+
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role, is_suspended')
+          .eq('id', session.user.id)
+          .single();
+
+        if (
+          !profile ||
+          (profile.role !== 'admin' && profile.role !== 'super_admin') ||
+          profile.is_suspended
+        ) {
+          router.replace('/login');
+          return;
+        }
+
         setIsAuthenticated(true);
-        return;
-      }
-
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session) {
+      } catch {
+        // Never strand the user on the splash/black screen if the check fails
         router.replace('/login');
-        return;
       }
-
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role, is_suspended')
-        .eq('id', session.user.id)
-        .single();
-
-      if (
-        !profile ||
-        (profile.role !== 'admin' && profile.role !== 'super_admin') ||
-        profile.is_suspended
-      ) {
-        router.replace('/login');
-        return;
-      }
-
-      setIsAuthenticated(true);
     }
 
     checkAdminAuth();
@@ -68,10 +77,10 @@ export default function DashboardLayout({
 
   return (
     <div className="min-h-screen bg-bg text-text-primary flex relative">
-      {/* Short 600ms Splash on initial entry */}
+      {/* Branded entry splash on initial mount */}
       {showSplash && (
         <CosmicSocialSplash
-          durationMs={600}
+          durationMs={1400}
           minimal={true}
           onFinish={() => setShowSplash(false)}
         />
@@ -85,14 +94,20 @@ export default function DashboardLayout({
         setIsMobileOpen={setIsMobileOpen}
       />
 
+      <AuroraBackground />
+
       {/* Main Content Area */}
       <div
-        className={`flex flex-col flex-1 min-h-screen transition-all duration-300 ${
+        className={`relative z-10 flex flex-col flex-1 min-h-screen transition-all duration-300 ${
           isCollapsed ? 'md:pl-20' : 'md:pl-64'
         }`}
       >
-        <AdminHeader onMenuClick={() => setIsMobileOpen(true)} />
+        <AdminHeader
+          onMenuClick={() => setIsMobileOpen(true)}
+          onSearchClick={() => setIsPaletteOpen(true)}
+        />
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
+          <Breadcrumbs />
           <AnimatePresence mode="wait">
             <PageTransition>
               {children}
@@ -100,6 +115,8 @@ export default function DashboardLayout({
           </AnimatePresence>
         </main>
       </div>
+
+      <CommandPalette open={isPaletteOpen} onOpenChange={setIsPaletteOpen} />
     </div>
   );
 }

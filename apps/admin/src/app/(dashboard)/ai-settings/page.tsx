@@ -8,13 +8,13 @@ import {
   Save,
   Sparkles,
   RotateCcw,
-  RefreshCw,
   Terminal,
 } from 'lucide-react';
 import { supabase, isPlaceholderUrl } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { AIConfig } from '@socialpilot/types';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { Button } from '@/components/ui/Button';
 
 const DEFAULT_AI_CONFIG: AIConfig = {
   id: '00000000-0000-0000-0000-000000000001',
@@ -147,17 +147,18 @@ export default function AISettingsPage() {
           </p>
         </div>
 
-        <button
+        <Button
           type="button"
+          variant="secondary"
+          size="sm"
           onClick={() => {
             setConfig(DEFAULT_AI_CONFIG);
             toast.info('Restored default AI settings');
           }}
-          className="flex items-center gap-1.5 px-3.5 py-2 bg-surface-subtle hover:bg-surface border border-border rounded-xl font-bold text-xs text-text-secondary hover:text-text-primary transition"
         >
           <RotateCcw className="w-3.5 h-3.5" />
           <span>Reset Defaults</span>
-        </button>
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
@@ -309,14 +310,16 @@ export default function AISettingsPage() {
             </div>
           </div>
 
-          <button
+          <Button
             type="submit"
+            size="lg"
             disabled={isSaving}
-            className="w-full flex items-center justify-center gap-2 px-6 py-3.5 bg-gradient-primary text-btn-text font-black text-sm rounded-xl shadow-xl shadow-glow/25 hover:opacity-95 transition disabled:opacity-50"
+            loadingText="Saving Configuration..."
+            className="w-full"
           >
             <Save className="w-4 h-4" />
-            <span>{isSaving ? 'Saving Configuration...' : 'Apply & Save AI Configuration'}</span>
-          </button>
+            <span>Apply & Save AI Configuration</span>
+          </Button>
         </form>
 
         {/* Right Interactive AI Playground Sandbox */}
@@ -347,24 +350,17 @@ export default function AISettingsPage() {
               />
             </div>
 
-            <button
+            <Button
               type="button"
+              size="sm"
               disabled={isTesting || !testPrompt.trim()}
               onClick={handleRunTestPrompt}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-surface-subtle hover:bg-surface border border-border hover:border-active-50 text-text-primary font-bold text-xs rounded-xl transition disabled:opacity-50"
+              loadingText="Synthesizing Output..."
+              className="w-full"
             >
-              {isTesting ? (
-                <>
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                  <span>Synthesizing Output...</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-3.5 h-3.5 text-warning" />
-                  <span>Execute Sandbox Query</span>
-                </>
-              )}
-            </button>
+              {!isTesting && <Sparkles className="w-3.5 h-3.5 text-warning" />}
+              <span>Execute Sandbox Query</span>
+            </Button>
 
             {/* Simulated Live Output */}
             {testOutput && (
@@ -373,7 +369,7 @@ export default function AISettingsPage() {
                   <span>Model Response</span>
                   {testLatencyMs && <span className="font-mono text-success">{testLatencyMs}ms</span>}
                 </div>
-                <div className="p-3.5 rounded-xl bg-surface-subtle/80 border border-border text-xs text-text-primary leading-relaxed">
+                <div className="p-3.5 rounded-xl bg-surface-subtle-80 border border-border text-xs text-text-primary leading-relaxed">
                   {testOutput}
                 </div>
               </div>

@@ -14,15 +14,17 @@ import { supabase, isPlaceholderUrl } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { TableSkeleton } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Button } from '@/components/ui/Button';
 
 interface AdminNotification {
   id: string;
   user_id?: string;
   title: string;
-  message: string;
+  body: string;
+  type?: string;
   target_audience?: string;
   is_read: boolean;
-  data?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
   created_at: string;
 }
 
@@ -30,7 +32,7 @@ const MOCK_NOTIFICATIONS: AdminNotification[] = [
   {
     id: 'notif_1',
     title: '🚀 Gemini 1.5 Pro Upgrade Live!',
-    message: 'We have upgraded all AI copywriting models to Gemini 1.5 Pro. Enjoy 3x faster caption generation.',
+    body: 'We have upgraded all AI copywriting models to Gemini 1.5 Pro. Enjoy 3x faster caption generation.',
     target_audience: 'All Users',
     is_read: true,
     created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
@@ -38,7 +40,7 @@ const MOCK_NOTIFICATIONS: AdminNotification[] = [
   {
     id: 'notif_2',
     title: '⚡ Weekend Pro Bonus Credits Granted',
-    message: 'Your account has been credited with +500 bonus AI tokens for the weekend publishing sprint.',
+    body: 'Your account has been credited with +500 bonus AI tokens for the weekend publishing sprint.',
     target_audience: 'Pro & Agency Tiers',
     is_read: true,
     created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
@@ -46,7 +48,7 @@ const MOCK_NOTIFICATIONS: AdminNotification[] = [
   {
     id: 'notif_3',
     title: '📱 Mobile App Version 3.2 Available',
-    message: 'Please update your mobile app via TestFlight or Play Store for the new white-label live preview.',
+    body: 'Please update your mobile app via TestFlight or Play Store for the new white-label live preview.',
     target_audience: 'All Users',
     is_read: false,
     created_at: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
@@ -131,10 +133,11 @@ export default function NotificationsPage() {
         const newNotif: AdminNotification = {
           id: `notif_${Date.now()}`,
           title: title.trim(),
-          message: message.trim(),
+          body: message.trim(),
+          type: 'promo',
           target_audience: targetAudience,
           is_read: false,
-          data: parsedData,
+          metadata: parsedData,
           created_at: new Date().toISOString(),
         };
         setNotifications([newNotif, ...notifications]);
@@ -157,11 +160,15 @@ export default function NotificationsPage() {
       if (userError) throw userError;
 
       if (users && users.length > 0) {
+        // One notifications row per targeted user — the mobile inbox reads
+        // these via realtime, and the DB trigger fans them out as device
+        // push through the send-push edge function.
         const records = users.map((u) => ({
           user_id: u.id,
           title: title.trim(),
-          message: message.trim(),
-          data: parsedData,
+          body: message.trim(),
+          type: 'promo',
+          metadata: parsedData,
           is_read: false,
         }));
 
@@ -169,7 +176,7 @@ export default function NotificationsPage() {
         if (insertError) throw insertError;
       }
 
-      toast.success(`Push notification dispatched to ${users?.length || 0} creators`);
+      toast.success(`Broadcast delivered to ${users?.length || 0} creators (in-app inbox + push)`);
       setTitle('');
       setMessage('');
       await loadNotifications();
@@ -211,13 +218,15 @@ export default function NotificationsPage() {
           </p>
         </div>
 
-        <button
-          onClick={loadNotifications}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-surface-subtle border border-border text-xs font-bold text-text-secondary hover:text-text-primary transition self-start sm:self-auto"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          <span>Sync</span>
-        </button>
+          <Button
+            onClick={loadNotifications}
+            variant="secondary"
+            size="sm"
+            className="gap-1.5"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            <span>Sync</span>
+          </Button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
@@ -288,14 +297,16 @@ export default function NotificationsPage() {
               />
             </div>
 
-            <button
+            <Button
               type="submit"
+              size="lg"
               disabled={isSending}
-              className="w-full flex items-center justify-center gap-2 px-6 py-3.5 bg-gradient-primary text-btn-text font-black text-sm rounded-xl shadow-xl shadow-glow/25 hover:opacity-95 transition disabled:opacity-50"
+              loadingText="Dispatching Push..."
+              className="w-full"
             >
               <Send className="w-4 h-4" />
-              <span>{isSending ? 'Dispatching Push...' : `Send Notification to ${targetAudience}`}</span>
-            </button>
+              <span>Send Notification to {targetAudience}</span>
+            </Button>
           </div>
         </form>
 
@@ -307,10 +318,10 @@ export default function NotificationsPage() {
           </div>
 
           {/* iOS / Android Style Notification Banner */}
-          <div className="p-4 rounded-2xl bg-surface/90 border border-border/80 shadow-2xl backdrop-blur-2xl space-y-2">
+          <div className="p-4 rounded-2xl bg-surface-90 border border-border-80 shadow-2xl backdrop-blur-2xl space-y-2">
             <div className="flex items-center justify-between text-[11px] text-text-muted">
               <div className="flex items-center gap-1.5">
-                <div className="w-4 h-4 rounded-md bg-primary flex items-center justify-center text-white">
+                <div className="w-4 h-4 rounded-md bg-primary flex items-center justify-center text-btn-text">
                   <Sparkles className="w-2.5 h-2.5" />
                 </div>
                 <span className="font-bold text-text-primary">SOCIALPILOT AI</span>
@@ -354,7 +365,7 @@ export default function NotificationsPage() {
             {notifications.map((notif) => (
               <div
                 key={notif.id}
-                className="p-4 rounded-xl bg-surface-subtle/70 border border-border flex items-start justify-between gap-4 hover:border-active-50 transition"
+                className="p-4 rounded-xl bg-surface-subtle-70 border border-border flex items-start justify-between gap-4 hover:border-active-50 transition"
               >
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
@@ -367,7 +378,7 @@ export default function NotificationsPage() {
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-text-secondary leading-relaxed">{notif.message}</p>
+                  <p className="text-xs text-text-secondary leading-relaxed">{notif.body}</p>
                   <span className="text-[10px] text-text-muted block pt-1">
                     {new Date(notif.created_at).toLocaleString(undefined, {
                       month: 'short',

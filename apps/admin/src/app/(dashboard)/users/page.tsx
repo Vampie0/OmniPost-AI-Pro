@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import {
   useReactTable,
   getCoreRowModel,
@@ -25,14 +25,18 @@ import {
   ChevronLeft,
   ChevronRight,
   RefreshCw,
-  X,
+  Eye,
 } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { supabase, isPlaceholderUrl } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { UserProfile, UserRole, SubscriptionTier } from '@socialpilot/types';
 import { exportToCsv } from '@/lib/csv';
 import { TableSkeleton } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Button } from '@/components/ui/Button';
+import { Modal } from '@/components/ui/Modal';
+import { Drawer, DrawerSection, DetailField } from '@/components/ui/Drawer';
 
 const MOCK_USERS: UserProfile[] = [
   {
@@ -117,15 +121,24 @@ export default function UsersDirectoryPage() {
 
   // Dialog states
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
+  const [detailUser, setDetailUser] = useState<UserProfile | null>(null);
   const [creditModalOpen, setCreditModalOpen] = useState(false);
   const [roleModalOpen, setRoleModalOpen] = useState(false);
   const [creditsDelta, setCreditsDelta] = useState<number>(500);
   const [selectedRole, setSelectedRole] = useState<UserRole>('user');
   const [isUpdating, setIsUpdating] = useState(false);
+  // Row-action guard: a ref survives stale closures (columns memo),
+  // the state drives the disabled UI.
+  const actionLockRef = useRef(false);
+  const [pendingUserId, setPendingUserId] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState(false);
+  const [suspendModalOpen, setSuspendModalOpen] = useState(false);
+  const [suspendReason, setSuspendReason] = useState('');
 
   const loadUsers = async () => {
     try {
       setLoading(true);
+      setLoadError(false);
       if (isPlaceholderUrl) {
         setUsers(MOCK_USERS);
         setLoading(false);
@@ -140,6 +153,7 @@ export default function UsersDirectoryPage() {
       if (error) throw error;
       setUsers((data as UserProfile[]) || []);
     } catch {
+      setLoadError(true);
       toast.error('Failed to load users from database');
     } finally {
       setLoading(false);
@@ -159,38 +173,75 @@ export default function UsersDirectoryPage() {
     });
   }, [users, tierFilter, roleFilter]);
 
-  // Actions
-  const toggleSuspend = async (user: UserProfile) => {
+  // Actions — all list updates use functional setState so a stale `users`
+  // closure can never wipe the table (previous bug: columns memo captured
+  // the initial empty array and setUsers(users.map(...)) cleared every row).
+  const toggleSuspend = async (user: UserProfile, reason: string | null) => {
+    if (actionLockRef.current) return;
+    actionLockRef.current = true;
+    setPendingUserId(user.id);
     const nextStatus = !user.is_suspended;
     try {
       if (isPlaceholderUrl) {
-        setUsers(users.map((u) => (u.id === user.id ? { ...u, is_suspended: nextStatus } : u)));
+        setUsers((prev) => prev.map((u) => (u.id === user.id ? { ...u, is_suspended: nextStatus, suspension_reason: reason } : u)));
         toast.success(`User ${nextStatus ? 'suspended' : 'unsuspended'} successfully`);
         return;
       }
 
       const { error } = await supabase
         .from('profiles')
-        .update({ is_suspended: nextStatus })
+        .update({ is_suspended: nextStatus, suspension_reason: reason })
         .eq('id', user.id);
 
       if (error) throw error;
-      setUsers(users.map((u) => (u.id === user.id ? { ...u, is_suspended: nextStatus } : u)));
-      toast.success(`User ${nextStatus ? 'suspended' : 'reactivated'}`);
+
+      // Deliver the reason to the customer: notification row → their in-app
+      // inbox (realtime) and device push (send-push trigger). Best-effort —
+      // a failed insert must never roll back the suspension itself.
+      const { error: notifyError } = await supabase.from('notifications').insert({
+        user_id: user.id,
+        title: nextStatus ? 'Account Suspended' : 'Account Reactivated',
+        body: nextStatus
+          ? `The administrator suspended your account. Reason: ${reason}`
+          : 'Your account has been reactivated. Welcome back!',
+        type: nextStatus ? 'warning' : 'success',
+        metadata: { kind: nextStatus ? 'account_suspended' : 'account_reactivated' },
+      });
+      if (notifyError) toast.warning('Status updated, but storing the user notification failed.');
+
+      setUsers((prev) => prev.map((u) => (u.id === user.id ? { ...u, is_suspended: nextStatus, suspension_reason: reason } : u)));
+      toast.success(`User ${nextStatus ? 'suspended' : 'reactivated'} — notification delivered`);
     } catch {
       toast.error('Failed to update suspension status');
+    } finally {
+      actionLockRef.current = false;
+      setPendingUserId(null);
+      setSuspendModalOpen(false);
     }
   };
 
+  // Suspend requires a reason (shown on the user's lock screen + delivered as
+  // a notification); reactivate is a one-click restore with the reason cleared.
+  const requestSuspend = (user: UserProfile) => {
+    if (actionLockRef.current) return;
+    if (user.is_suspended) {
+      toggleSuspend(user, null);
+      return;
+    }
+    setSelectedUser(user);
+    setSuspendReason('');
+    setSuspendModalOpen(true);
+  };
+
   const handleUpdateCredits = async () => {
-    if (!selectedUser) return;
+    if (!selectedUser || isUpdating) return;
     try {
       setIsUpdating(true);
       const newCredits = Math.max(0, selectedUser.credits_remaining + Number(creditsDelta));
 
       if (isPlaceholderUrl) {
         setUsers(
-          users.map((u) => (u.id === selectedUser.id ? { ...u, credits_remaining: newCredits } : u))
+          (prev) => prev.map((u) => (u.id === selectedUser.id ? { ...u, credits_remaining: newCredits } : u))
         );
         toast.success(`Updated credits: ${newCredits} remaining`);
         setCreditModalOpen(false);
@@ -205,7 +256,7 @@ export default function UsersDirectoryPage() {
 
       if (error) throw error;
       setUsers(
-        users.map((u) => (u.id === selectedUser.id ? { ...u, credits_remaining: newCredits } : u))
+        (prev) => prev.map((u) => (u.id === selectedUser.id ? { ...u, credits_remaining: newCredits } : u))
       );
       toast.success(`Credits updated to ${newCredits}`);
       setCreditModalOpen(false);
@@ -217,13 +268,13 @@ export default function UsersDirectoryPage() {
   };
 
   const handleUpdateRole = async () => {
-    if (!selectedUser) return;
+    if (!selectedUser || isUpdating) return;
     try {
       setIsUpdating(true);
 
       if (isPlaceholderUrl) {
         setUsers(
-          users.map((u) => (u.id === selectedUser.id ? { ...u, role: selectedRole } : u))
+          (prev) => prev.map((u) => (u.id === selectedUser.id ? { ...u, role: selectedRole } : u))
         );
         toast.success(`Role changed to ${selectedRole}`);
         setRoleModalOpen(false);
@@ -238,7 +289,7 @@ export default function UsersDirectoryPage() {
 
       if (error) throw error;
       setUsers(
-        users.map((u) => (u.id === selectedUser.id ? { ...u, role: selectedRole } : u))
+        (prev) => prev.map((u) => (u.id === selectedUser.id ? { ...u, role: selectedRole } : u))
       );
       toast.success(`Role updated to ${selectedRole}`);
       setRoleModalOpen(false);
@@ -250,23 +301,29 @@ export default function UsersDirectoryPage() {
   };
 
   const handleDeleteUser = async (user: UserProfile) => {
+    if (actionLockRef.current) return;
     if (!confirm(`Permanently delete account for ${user.email}? This action cannot be undone.`)) {
       return;
     }
+    actionLockRef.current = true;
+    setPendingUserId(user.id);
 
     try {
       if (isPlaceholderUrl) {
-        setUsers(users.filter((u) => u.id !== user.id));
+        setUsers((prev) => prev.filter((u) => u.id !== user.id));
         toast.success('User permanently deleted');
         return;
       }
 
       const { error } = await supabase.from('profiles').delete().eq('id', user.id);
       if (error) throw error;
-      setUsers(users.filter((u) => u.id !== user.id));
+      setUsers((prev) => prev.filter((u) => u.id !== user.id));
       toast.success('User account removed');
     } catch {
       toast.error('Failed to delete user');
+    } finally {
+      actionLockRef.current = false;
+      setPendingUserId(null);
     }
   };
 
@@ -400,30 +457,54 @@ export default function UsersDirectoryPage() {
           const u = row.original;
           return (
             <div className="flex items-center justify-end gap-1.5">
-              <button
-                onClick={() => toggleSuspend(u)}
+              <Button
+                onClick={() => setDetailUser(u)}
+                title="View full record"
+                variant="ghost"
+                size="sm"
+                className="text-text-secondary hover:text-primary"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                Details
+              </Button>
+              <Button
+                onClick={() => requestSuspend(u)}
                 title={u.is_suspended ? 'Reactivate account' : 'Suspend user'}
-                className={`p-1.5 rounded-lg border text-xs font-bold transition ${
+                variant={u.is_suspended ? 'secondary' : 'ghost'}
+                size="sm"
+                disabled={pendingUserId !== null}
+                className={
                   u.is_suspended
                     ? 'text-success bg-success-10 border-success-30 hover:bg-success-20'
                     : 'text-warning bg-warning-10 border-warning-30 hover:bg-warning-20'
-                }`}
+                }
               >
-                {u.is_suspended ? <UserCheck className="w-3.5 h-3.5" /> : <UserX className="w-3.5 h-3.5" />}
-              </button>
-              <button
+                {pendingUserId === u.id ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : u.is_suspended ? (
+                  <UserCheck className="w-3.5 h-3.5" />
+                ) : (
+                  <UserX className="w-3.5 h-3.5" />
+                )}
+              </Button>
+              <Button
                 onClick={() => handleDeleteUser(u)}
                 title="Delete user"
-                className="p-1.5 rounded-lg border border-danger-30 text-danger bg-danger-10 hover:bg-danger-20 transition"
+                variant="ghost"
+                size="sm"
+                disabled={pendingUserId !== null}
+                className="border border-danger-30 text-danger bg-danger-10 hover:bg-danger-20"
               >
                 <Trash2 className="w-3.5 h-3.5" />
-              </button>
+              </Button>
             </div>
           );
         },
       },
     ],
-    []
+    // pendingUserId re-renders action cells with the disabled/spinner state;
+    // handlers themselves are stale-closure-safe (refs + functional setState).
+    [pendingUserId]
   );
 
   const table = useReactTable({
@@ -465,7 +546,7 @@ export default function UsersDirectoryPage() {
           </button>
           <button
             onClick={handleExportCsv}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-primary text-btn-text text-xs font-bold shadow-md shadow-glow/20 hover:opacity-95 transition"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-primary text-btn-text text-xs font-bold shadow-md shadow-glow-20 hover:opacity-95 transition"
           >
             <Download className="w-3.5 h-3.5" />
             <span>Export CSV</span>
@@ -518,6 +599,14 @@ export default function UsersDirectoryPage() {
           <div className="p-6">
             <TableSkeleton rows={5} cols={6} />
           </div>
+        ) : loadError && users.length === 0 ? (
+          <EmptyState
+            title="Couldn't Load Users"
+            description="The database request failed. Check your connection and try again."
+            icon={RefreshCw}
+            actionLabel="Retry"
+            onAction={loadUsers}
+          />
         ) : filteredData.length === 0 ? (
           <EmptyState
             title="No Users Found"
@@ -533,7 +622,7 @@ export default function UsersDirectoryPage() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="border-b border-border bg-surface-subtle/70">
+              <thead className="border-b border-border bg-surface-subtle-70">
                 {table.getHeaderGroups().map((headerGroup) => (
                   <tr key={headerGroup.id}>
                     {headerGroup.headers.map((header) => (
@@ -549,9 +638,9 @@ export default function UsersDirectoryPage() {
                   </tr>
                 ))}
               </thead>
-              <tbody className="divide-y divide-border/60">
+              <tbody className="divide-y divide-border-60">
                 {table.getRowModel().rows.map((row) => (
-                  <tr key={row.id} className="hover:bg-surface-subtle/40 transition">
+                  <tr key={row.id} className="hover:bg-surface-subtle-40 transition">
                     {row.getVisibleCells().map((cell) => (
                       <td key={cell.id} className="px-6 py-4">
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -592,136 +681,287 @@ export default function UsersDirectoryPage() {
       </div>
 
       {/* Modal: Add/Edit Credits */}
-      {creditModalOpen && selectedUser && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="glass-panel rounded-3xl p-6 max-w-md w-full shadow-2xl border border-border space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-border">
-              <div className="flex items-center gap-2">
-                <Coins className="w-5 h-5 text-warning" />
-                <h2 className="text-base font-bold text-text-primary">Grant AI Credits</h2>
-              </div>
-              <button
-                onClick={() => setCreditModalOpen(false)}
-                className="p-1 rounded-lg text-text-muted hover:text-text-primary"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <p className="text-xs text-text-secondary">
-              Modifying credits for <strong className="text-text-primary">{selectedUser.email}</strong>.
-              Current remaining: <strong>{selectedUser.credits_remaining}</strong>.
-            </p>
-
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-text-secondary mb-1.5">
-                Credits Adjustment (+ or -)
-              </label>
-              <input
-                type="number"
-                value={creditsDelta}
-                onChange={(e) => setCreditsDelta(parseInt(e.target.value) || 0)}
-                className="w-full bg-input-bg border border-border rounded-xl px-4 py-2.5 text-sm text-text-primary focus:outline-none focus:border-active transition"
-              />
-            </div>
-
-            <div className="flex gap-2">
-              {[100, 500, 1000, 5000].map((preset) => (
-                <button
-                  key={preset}
-                  type="button"
-                  onClick={() => setCreditsDelta(preset)}
-                  className="flex-1 py-1.5 rounded-lg bg-surface-subtle border border-border hover:border-active-50 text-xs font-bold text-text-primary transition"
-                >
-                  +{preset}
-                </button>
-              ))}
-            </div>
-
-            <div className="pt-2 flex justify-end gap-3">
-              <button
+      {selectedUser && (
+        <Modal
+          open={creditModalOpen}
+          onClose={() => setCreditModalOpen(false)}
+          title="Grant AI Credits"
+          description={selectedUser.email}
+          icon={<Coins className="w-4 h-4" />}
+          footer={
+            <>
+              <Button
                 type="button"
+                variant="secondary"
+                size="sm"
                 onClick={() => setCreditModalOpen(false)}
-                className="px-4 py-2 rounded-xl bg-surface-subtle border border-border text-xs font-bold text-text-secondary hover:text-text-primary"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                size="sm"
                 disabled={isUpdating}
                 onClick={handleUpdateCredits}
-                className="px-5 py-2 rounded-xl bg-gradient-primary text-btn-text text-xs font-bold hover:opacity-95 transition disabled:opacity-50"
+                loadingText="Updating..."
               >
-                {isUpdating ? 'Updating...' : 'Confirm Credit Update'}
-              </button>
-            </div>
+                Confirm Credit Update
+              </Button>
+            </>
+          }
+        >
+          <p className="text-xs text-text-secondary">
+            Current remaining balance:{' '}
+            <strong className="text-text-primary">{selectedUser.credits_remaining}</strong> credits.
+          </p>
+
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-text-secondary mb-1.5">
+              Credits Adjustment (+ or -)
+            </label>
+            <input
+              type="number"
+              value={creditsDelta}
+              onChange={(e) => setCreditsDelta(parseInt(e.target.value) || 0)}
+              className="w-full bg-input-bg border border-border rounded-xl px-4 py-2.5 text-sm text-text-primary focus:outline-none focus:border-active transition"
+            />
           </div>
-        </div>
+
+          <div className="flex gap-2">
+            {[100, 500, 1000, 5000].map((preset) => (
+              <button
+                key={preset}
+                type="button"
+                onClick={() => setCreditsDelta(preset)}
+                className="flex-1 py-1.5 rounded-lg bg-surface-subtle border border-border hover:border-active-50 hover:bg-surface-subtle-70 text-xs font-bold text-text-primary transition-all duration-200 ease-quint-out active:scale-[0.97]"
+              >
+                +{preset}
+              </button>
+            ))}
+          </div>
+        </Modal>
       )}
 
       {/* Modal: Change Role */}
-      {roleModalOpen && selectedUser && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="glass-panel rounded-3xl p-6 max-w-md w-full shadow-2xl border border-border space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-border">
-              <div className="flex items-center gap-2">
-                <ShieldAlert className="w-5 h-5 text-primary" />
-                <h2 className="text-base font-bold text-text-primary">Assign Security Role</h2>
-              </div>
-              <button
-                onClick={() => setRoleModalOpen(false)}
-                className="p-1 rounded-lg text-text-muted hover:text-text-primary"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <p className="text-xs text-text-secondary">
-              Update role for <strong className="text-text-primary">{selectedUser.email}</strong>.
-            </p>
-
-            <div className="space-y-2">
-              {(['user', 'admin', 'super_admin'] as UserRole[]).map((r) => (
-                <label
-                  key={r}
-                  className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition ${
-                    selectedRole === r
-                      ? 'border-active bg-surface-subtle text-text-primary'
-                      : 'border-border bg-input-bg text-text-secondary hover:border-active-50'
-                  }`}
-                >
-                  <div className="capitalize text-xs font-bold">{r.replace('_', ' ')}</div>
-                  <input
-                    type="radio"
-                    name="userRole"
-                    checked={selectedRole === r}
-                    onChange={() => setSelectedRole(r)}
-                    className="w-4 h-4 text-primary"
-                  />
-                </label>
-              ))}
-            </div>
-
-            <div className="pt-2 flex justify-end gap-3">
-              <button
+      {selectedUser && (
+        <Modal
+          open={roleModalOpen}
+          onClose={() => setRoleModalOpen(false)}
+          title="Assign Security Role"
+          description={selectedUser.email}
+          icon={<ShieldAlert className="w-4 h-4" />}
+          footer={
+            <>
+              <Button
                 type="button"
+                variant="secondary"
+                size="sm"
                 onClick={() => setRoleModalOpen(false)}
-                className="px-4 py-2 rounded-xl bg-surface-subtle border border-border text-xs font-bold text-text-secondary hover:text-text-primary"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                size="sm"
                 disabled={isUpdating}
                 onClick={handleUpdateRole}
-                className="px-5 py-2 rounded-xl bg-gradient-primary text-btn-text text-xs font-bold hover:opacity-95 transition disabled:opacity-50"
+                loadingText="Saving..."
               >
-                {isUpdating ? 'Saving...' : 'Apply Role'}
-              </button>
+                Apply Role
+              </Button>
+            </>
+          }
+        >
+          <div className="space-y-2">
+            {(['user', 'admin', 'super_admin'] as UserRole[]).map((r) => (
+              <label
+                key={r}
+                className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all duration-200 ease-quint-out ${
+                  selectedRole === r
+                    ? 'border-active bg-surface-subtle text-text-primary shadow-glow-sm'
+                    : 'border-border bg-input-bg text-text-secondary hover:border-active-50'
+                }`}
+              >
+                <div className="capitalize text-xs font-bold">{r.replace('_', ' ')}</div>
+                <input
+                  type="radio"
+                  name="userRole"
+                  checked={selectedRole === r}
+                  onChange={() => setSelectedRole(r)}
+                  className="w-4 h-4 text-primary"
+                />
+              </label>
+            ))}
+          </div>
+        </Modal>
+      )}
+
+      {/* Modal: Suspend User (reason required — delivered to the customer) */}
+      {selectedUser && (
+        <Modal
+          open={suspendModalOpen}
+          onClose={() => setSuspendModalOpen(false)}
+          title="Suspend User"
+          description={selectedUser.email}
+          icon={<UserX className="w-4 h-4" />}
+          footer={
+            <>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => setSuspendModalOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                disabled={pendingUserId === selectedUser.id || suspendReason.trim().length < 5}
+                onClick={() => toggleSuspend(selectedUser, suspendReason.trim())}
+                loadingText="Suspending..."
+              >
+                Confirm Suspension
+              </Button>
+            </>
+          }
+        >
+          <p className="text-xs text-text-secondary leading-relaxed">
+            The reason below is shown on the user&apos;s lock screen inside the app and delivered as
+            an in-app / push notification.
+          </p>
+
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-text-secondary mb-1.5">
+              Reason for Suspension
+            </label>
+            <textarea
+              value={suspendReason}
+              onChange={(e) => setSuspendReason(e.target.value)}
+              rows={3}
+              placeholder="e.g. Violation of fair-use policy — repeated automated posting"
+              className="w-full bg-input-bg border border-border rounded-xl px-4 py-2.5 text-sm text-text-primary focus:outline-none focus:border-active transition resize-none"
+            />
+            <p className="text-[11px] text-text-muted mt-1.5">Minimum 5 characters.</p>
+          </div>
+        </Modal>
+      )}
+
+      {/* Detail panel: the readable counterpart to the action modals */}
+      <Drawer
+        open={!!detailUser}
+        onClose={() => setDetailUser(null)}
+        eyebrow={detailUser?.role.replace('_', ' ') ?? ''}
+        title={detailUser?.full_name || detailUser?.email || ''}
+        subtitle={detailUser?.email ?? ''}
+        avatar={
+          detailUser && (
+            <div className="w-11 h-11 rounded-xl bg-gradient-primary flex items-center justify-center text-btn-text text-sm font-black shrink-0">
+              {(detailUser.full_name || detailUser.email).slice(0, 2).toUpperCase()}
+            </div>
+          )
+        }
+        footer={
+          detailUser && (
+            <>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  setSelectedUser(detailUser);
+                  setCreditsDelta(500);
+                  setCreditModalOpen(true);
+                }}
+              >
+                <Coins className="w-3.5 h-3.5" />
+                Grant Credits
+              </Button>
+              <Button
+                variant={detailUser.is_suspended ? 'secondary' : 'danger'}
+                size="sm"
+                disabled={pendingUserId !== null}
+                onClick={() => {
+                  setSelectedUser(detailUser);
+                  setSuspendReason('');
+                  setSuspendModalOpen(true);
+                }}
+              >
+                {detailUser.is_suspended ? 'Reactivate' : 'Suspend'}
+              </Button>
+            </>
+          )
+        }
+      >
+        {detailUser && (
+          <>
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-text-muted">
+                Credit Usage
+              </span>
+              <span className="text-xs font-black text-text-primary tabular-nums">
+                {detailUser.credits_remaining}
+                <span className="text-text-muted font-bold">
+                  {' '}/ {detailUser.credits_limit}
+                </span>
+              </span>
+            </div>
+            <div className="h-2 rounded-full bg-surface-subtle overflow-hidden">
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{
+                  width: `${Math.min(
+                    100,
+                    detailUser.credits_limit
+                      ? (detailUser.credits_remaining / detailUser.credits_limit) * 100
+                      : 0
+                  )}%`,
+                }}
+                transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+                className="h-full rounded-full bg-gradient-primary"
+              />
             </div>
           </div>
-        </div>
-      )}
+
+          <DrawerSection label="Account">
+            <DetailField
+              label="Status"
+              value={
+                <span className={detailUser.is_suspended ? 'text-danger' : 'text-success'}>
+                  {detailUser.is_suspended ? 'Suspended' : 'Active'}
+                </span>
+              }
+            />
+            <DetailField label="Role" value={detailUser.role.replace('_', ' ')} />
+            <DetailField label="Subscription" value={detailUser.subscription_tier} />
+            <DetailField
+              label="Onboarding"
+              value={detailUser.onboarding_completed ? 'Completed' : 'Not started'}
+            />
+          </DrawerSection>
+
+          {detailUser.is_suspended && detailUser.suspension_reason && (
+            <DrawerSection label="Enforcement">
+              <p className="px-4 py-3 text-xs text-text-secondary leading-relaxed">
+                {detailUser.suspension_reason}
+              </p>
+            </DrawerSection>
+          )}
+
+          <DrawerSection label="Timeline">
+            <DetailField
+              label="Created"
+              value={new Date(detailUser.created_at).toLocaleString()}
+            />
+            <DetailField
+              label="Last updated"
+              value={new Date(detailUser.updated_at).toLocaleString()}
+            />
+            <DetailField label="User ID" value={detailUser.id} mono />
+          </DrawerSection>
+          </>
+        )}
+      </Drawer>
     </div>
   );
 }

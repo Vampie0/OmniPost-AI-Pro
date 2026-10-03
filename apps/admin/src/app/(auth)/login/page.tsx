@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { supabase, isPlaceholderUrl } from '@/lib/supabase';
+import { createBrowserClient } from '@supabase/ssr';
+import { isPlaceholderUrl } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import {
@@ -21,6 +22,8 @@ import {
   Star,
   KeyRound,
   Fingerprint,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { CosmicSocialSplash } from '@/components/ui/CosmicSocialSplash';
 import { ThemeModeToggle } from '@/components/ThemePicker';
@@ -45,6 +48,7 @@ export default function SaaSAdminLandingPage() {
   const [authMode, setAuthMode] = useState<'password' | 'otp'>('password');
   const [otpSent, setOtpSent] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   // RHF for password login
   const {
@@ -54,8 +58,8 @@ export default function SaaSAdminLandingPage() {
   } = useForm<PasswordLoginForm>({
     resolver: zodResolver(passwordLoginSchema),
     defaultValues: {
-      email: 'admin@socialpilot.ai',
-      password: 'password123',
+      email: '',
+      password: '',
     },
   });
 
@@ -67,10 +71,24 @@ export default function SaaSAdminLandingPage() {
   } = useForm<OtpLoginForm>({
     resolver: zodResolver(otpLoginSchema),
     defaultValues: {
-      email: 'admin@socialpilot.ai',
+      email: '',
       otpCode: '',
     },
   });
+
+  // Create SSR-aware client that syncs auth cookies for middleware.
+  // Cached in a ref: one client per page instance instead of a fresh
+  // createBrowserClient (and auth listener) per login attempt.
+  const supabaseClientRef = React.useRef<ReturnType<typeof createBrowserClient> | null>(null);
+  const getSupabase = () => {
+    if (!supabaseClientRef.current) {
+      supabaseClientRef.current = createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      );
+    }
+    return supabaseClientRef.current;
+  };
 
   const handlePasswordLogin = async (data: PasswordLoginForm) => {
     try {
@@ -83,6 +101,7 @@ export default function SaaSAdminLandingPage() {
         return;
       }
 
+      const supabase = getSupabase();
       const { data: authData, error } = await supabase.auth.signInWithPassword({
         email: data.email.trim(),
         password: data.password,
@@ -122,7 +141,9 @@ export default function SaaSAdminLandingPage() {
       }
 
       toast.success('Welcome to SocialPilot Control Center');
-      router.replace('/');
+      setIsLoading(false);
+      // Full page reload so middleware picks up auth cookies
+      window.location.href = '/';
     } catch {
       toast.error('Connection error occurred while logging in.');
       setIsLoading(false);
@@ -132,6 +153,7 @@ export default function SaaSAdminLandingPage() {
   const handleOtpLogin = async (data: OtpLoginForm) => {
     try {
       setIsLoading(true);
+      const supabase = getSupabase();
 
       if (!otpSent) {
         // Send OTP / Magic link
@@ -201,7 +223,8 @@ export default function SaaSAdminLandingPage() {
         }
 
         toast.success('OTP Authentication Successful');
-        router.replace('/');
+        setIsLoading(false);
+        window.location.href = '/';
       }
     } catch {
       toast.error('An unexpected authentication error occurred.');
@@ -214,7 +237,7 @@ export default function SaaSAdminLandingPage() {
       {/* 1. Animated Cosmic Social Splash Screen */}
       {showSplash && (
         <CosmicSocialSplash
-          durationMs={2000}
+          durationMs={2800}
           onFinish={() => setShowSplash(false)}
           appName="SocialPilot AI Pro"
           tagline="Autonomous Multi-Platform Growth Engine"
@@ -226,17 +249,17 @@ export default function SaaSAdminLandingPage() {
         className="fixed inset-0 opacity-30 pointer-events-none"
         style={{
           backgroundImage:
-            'radial-gradient(rgba(124, 58, 237, 0.18) 1px, transparent 1px)',
+            'radial-gradient(circle, var(--color-primary) 0.5px, transparent 0.5px)',
           backgroundSize: '32px 32px',
         }}
       />
       <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-gradient-primary opacity-15 blur-[120px] pointer-events-none rounded-full" />
 
       {/* Top Navbar */}
-      <header className="sticky top-0 z-40 w-full border-b border-border bg-surface/80 backdrop-blur-xl">
+      <header className="sticky top-0 z-40 w-full border-b border-border bg-surface-80 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-primary flex items-center justify-center shadow-lg shadow-glow/20">
+            <div className="w-9 h-9 rounded-xl bg-gradient-primary flex items-center justify-center shadow-lg shadow-glow-20">
               <Sparkles className="w-5 h-5 text-btn-text" />
             </div>
             <span className="text-lg font-black tracking-tight text-text-primary">
@@ -318,7 +341,7 @@ export default function SaaSAdminLandingPage() {
               >
                 <a
                   href="#auth-card"
-                  className="inline-flex items-center gap-2 px-6 py-3.5 rounded-xl bg-gradient-primary text-btn-text font-extrabold text-sm shadow-xl shadow-glow/25 hover:opacity-95 transition"
+                  className="inline-flex items-center gap-2 px-6 py-3.5 rounded-xl bg-gradient-primary text-btn-text font-extrabold text-sm shadow-xl shadow-glow-25 hover:opacity-95 transition"
                 >
                   <span>Enter Admin Workspace</span>
                   <ArrowRight className="w-4 h-4" />
@@ -332,7 +355,7 @@ export default function SaaSAdminLandingPage() {
               </motion.div>
 
               {/* Trust Indicators */}
-              <div className="pt-6 border-t border-border/80 grid grid-cols-3 gap-4 max-w-md">
+              <div className="pt-6 border-t border-border-80 grid grid-cols-3 gap-4 max-w-md">
                 <div>
                   <div className="text-2xl font-black text-text-primary">99.9%</div>
                   <div className="text-xs text-text-muted">Uptime SLA</div>
@@ -430,11 +453,24 @@ export default function SaaSAdminLandingPage() {
                       <div className="relative">
                         <Lock className="w-4 h-4 text-text-muted absolute left-3.5 top-1/2 -translate-y-1/2" />
                         <input
-                          type="password"
+                          type={showPassword ? 'text' : 'password'}
                           {...registerPassword('password')}
                           placeholder="••••••••••••"
-                          className="w-full bg-input-bg border border-border rounded-xl pl-10 pr-4 py-2.5 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:border-active transition"
+                          className="w-full bg-input-bg border border-border rounded-xl pl-10 pr-12 py-2.5 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:border-active transition"
                         />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword((p) => !p)}
+                          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary transition p-0.5"
+                          tabIndex={-1}
+                          aria-label={showPassword ? 'Hide password' : 'Show password'}
+                        >
+                          {showPassword ? (
+                            <EyeOff className="w-4 h-4" />
+                          ) : (
+                            <Eye className="w-4 h-4" />
+                          )}
+                        </button>
                       </div>
                       {passwordErrors.password && (
                         <p className="text-xs text-danger mt-1">
@@ -446,7 +482,7 @@ export default function SaaSAdminLandingPage() {
                     <button
                       type="submit"
                       disabled={isLoading}
-                      className="w-full flex items-center justify-center gap-2 bg-gradient-primary hover:opacity-95 text-btn-text font-extrabold py-3 px-4 rounded-xl shadow-lg shadow-glow/25 transition disabled:opacity-50 text-sm mt-3"
+                      className="w-full flex items-center justify-center gap-2 bg-gradient-primary hover:opacity-95 text-btn-text font-extrabold py-3 px-4 rounded-xl shadow-lg shadow-glow-25 transition disabled:opacity-50 text-sm mt-3"
                     >
                       {isLoading ? (
                         <div className="w-5 h-5 border-2 border-btn-text border-t-transparent rounded-full animate-spin" />
@@ -512,7 +548,7 @@ export default function SaaSAdminLandingPage() {
                     <button
                       type="submit"
                       disabled={isLoading}
-                      className="w-full flex items-center justify-center gap-2 bg-gradient-primary hover:opacity-95 text-btn-text font-extrabold py-3 px-4 rounded-xl shadow-lg shadow-glow/25 transition disabled:opacity-50 text-sm mt-3"
+                      className="w-full flex items-center justify-center gap-2 bg-gradient-primary hover:opacity-95 text-btn-text font-extrabold py-3 px-4 rounded-xl shadow-lg shadow-glow-25 transition disabled:opacity-50 text-sm mt-3"
                     >
                       {isLoading ? (
                         <div className="w-5 h-5 border-2 border-btn-text border-t-transparent rounded-full animate-spin" />
@@ -621,7 +657,7 @@ export default function SaaSAdminLandingPage() {
               <div
                 key={tier.name}
                 className={`glass-panel rounded-2xl p-6 flex flex-col justify-between relative ${
-                  tier.popular ? 'border-active shadow-xl shadow-glow/10' : ''
+                  tier.popular ? 'border-active shadow-xl shadow-glow-10' : ''
                 }`}
               >
                 {tier.popular && (
@@ -681,7 +717,7 @@ export default function SaaSAdminLandingPage() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-border bg-surface/50 py-12 px-4 sm:px-6 lg:px-8">
+      <footer className="border-t border-border bg-surface-50 py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-text-muted">
           <div>© 2026 SocialPilot AI Pro. All rights reserved.</div>
           <div className="flex items-center gap-6">

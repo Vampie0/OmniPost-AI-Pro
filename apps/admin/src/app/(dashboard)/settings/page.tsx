@@ -12,7 +12,6 @@ import {
   Key,
   Download,
   Eye,
-  X,
   FileCode,
 } from 'lucide-react';
 import { supabase, isPlaceholderUrl } from '@/lib/supabase';
@@ -21,47 +20,46 @@ import { ThemePicker } from '@/components/ThemePicker';
 import { exportToCsv } from '@/lib/csv';
 import { TableSkeleton } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
-
-interface AdminAuditLog {
-  id: string;
-  admin_id: string;
-  action: string;
-  target_resource: string;
-  details: Record<string, unknown>;
-  created_at: string;
-}
+import { Button } from '@/components/ui/Button';
+import { Tabs } from '@/components/ui/Tabs';
+import { Drawer, DrawerSection, DetailField } from '@/components/ui/Drawer';
+import { AdminAuditLog } from '@socialpilot/types';
 
 const MOCK_AUDIT_LOGS: AdminAuditLog[] = [
   {
     id: 'log_1',
     admin_id: 'superadmin@socialpilot.ai',
     action: 'template_created',
-    target_resource: 'templates/tpl_1',
+    target_entity: 'templates/tpl_1',
     details: { title: 'High-Converting Instagram Carousel Caption', category: 'Social Media' },
+    ip_address: '192.168.1.1',
     created_at: new Date(Date.now() - 20 * 60 * 1000).toISOString(),
   },
   {
     id: 'log_2',
     admin_id: 'superadmin@socialpilot.ai',
     action: 'user_suspended',
-    target_resource: 'profiles/usr_4',
+    target_entity: 'profiles/usr_4',
     details: { reason: 'Phishing spam detected in queued post' },
+    ip_address: '192.168.1.1',
     created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
   },
   {
     id: 'log_3',
     admin_id: 'superadmin@socialpilot.ai',
     action: 'ai_config_updated',
-    target_resource: 'ai_config/00000000-0000-0000-0000-000000000001',
+    target_entity: 'ai_config/00000000-0000-0000-0000-000000000001',
     details: { model: 'gemini-1.5-pro', temperature: 0.7 },
+    ip_address: '192.168.1.1',
     created_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
   },
   {
     id: 'log_4',
     admin_id: 'superadmin@socialpilot.ai',
     action: 'credits_granted',
-    target_resource: 'profiles/usr_2',
+    target_entity: 'profiles/usr_2',
     details: { amount_granted: 1000, new_balance: 8500 },
+    ip_address: '192.168.1.1',
     created_at: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
   },
 ];
@@ -94,7 +92,7 @@ export default function SystemSettingsPage() {
       }
 
       const { data, error } = await supabase
-        .from('admin_logs')
+        .from('admin_audit_logs')
         .select('*')
         .order('created_at', { ascending: false })
         .limit(100);
@@ -124,7 +122,7 @@ export default function SystemSettingsPage() {
       id: 'Log ID',
       admin_id: 'Admin Actor',
       action: 'Action Taken',
-      target_resource: 'Target Resource',
+      target_entity: 'Target Resource',
       created_at: 'Timestamp',
     });
     toast.success('Audit logs exported to CSV');
@@ -146,31 +144,16 @@ export default function SystemSettingsPage() {
       </div>
 
       {/* Tabs Navigation Bar */}
-      <div className="flex border-b border-border gap-2 overflow-x-auto pb-1 scrollbar-none">
-        {[
-          { id: 'general', label: 'General & Security', icon: Settings },
-          { id: 'integrations', label: 'Billing & APIs', icon: Key },
-          { id: 'audit', label: 'Audit Trail Logs', icon: AlertTriangle },
-          { id: 'appearance', label: 'Luxury Appearance', icon: Palette },
-        ].map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`flex items-center gap-2 px-4 py-3 border-b-2 text-xs sm:text-sm font-bold transition whitespace-nowrap ${
-                isActive
-                  ? 'border-primary text-text-primary bg-surface-subtle/40 rounded-t-xl'
-                  : 'border-transparent text-text-secondary hover:text-text-primary'
-              }`}
-            >
-              <Icon className={`w-4 h-4 ${isActive ? 'text-primary' : 'text-text-muted'}`} />
-              <span>{tab.label}</span>
-            </button>
-          );
-        })}
-      </div>
+      <Tabs
+        value={activeTab}
+        onChange={setActiveTab}
+        tabs={[
+          { value: 'general', label: 'General & Security', icon: Settings },
+          { value: 'integrations', label: 'Billing & APIs', icon: Key },
+          { value: 'audit', label: 'Audit Trail Logs', icon: AlertTriangle },
+          { value: 'appearance', label: 'Luxury Appearance', icon: Palette },
+        ]}
+      />
 
       {/* Tab 1: General & Security */}
       {activeTab === 'general' && (
@@ -259,7 +242,7 @@ export default function SystemSettingsPage() {
             </h2>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <label className="flex items-center justify-between p-4 rounded-xl border border-border bg-surface-subtle/50 cursor-pointer hover:border-active-50 transition">
+              <label className="flex items-center justify-between p-4 rounded-xl border border-border bg-surface-subtle-50 cursor-pointer hover:border-active-50 transition">
                 <div>
                   <div className="text-xs font-bold text-text-primary">Maintenance Mode</div>
                   <div className="text-[11px] text-text-muted">Temporarily disable client generation</div>
@@ -274,7 +257,7 @@ export default function SystemSettingsPage() {
                 />
               </label>
 
-              <label className="flex items-center justify-between p-4 rounded-xl border border-border bg-surface-subtle/50 cursor-pointer hover:border-active-50 transition">
+              <label className="flex items-center justify-between p-4 rounded-xl border border-border bg-surface-subtle-50 cursor-pointer hover:border-active-50 transition">
                 <div>
                   <div className="text-xs font-bold text-text-primary">Debug & Verbose Logging</div>
                   <div className="text-[11px] text-text-muted">Record full payload in admin audit logs</div>
@@ -291,13 +274,10 @@ export default function SystemSettingsPage() {
             </div>
           </div>
 
-          <button
-            type="submit"
-            className="flex items-center gap-2 px-6 py-3.5 bg-gradient-primary text-btn-text font-black text-sm rounded-xl shadow-xl shadow-glow/25 hover:opacity-95 transition"
-          >
+          <Button type="submit" size="lg" className="shadow-xl shadow-glow-25">
             <Save className="w-4 h-4" />
             <span>Save System Parameters</span>
-          </button>
+          </Button>
         </form>
       )}
 
@@ -337,11 +317,11 @@ export default function SystemSettingsPage() {
             </div>
 
             <div className="space-y-3 text-xs">
-              <div className="flex items-center justify-between p-3 rounded-xl bg-surface-subtle/70 border border-border">
+              <div className="flex items-center justify-between p-3 rounded-xl bg-surface-subtle-70 border border-border">
                 <span className="font-bold text-text-primary">Google Gemini API Key</span>
                 <span className="font-mono text-text-muted">••••••••••••••••AIzaSy34</span>
               </div>
-              <div className="flex items-center justify-between p-3 rounded-xl bg-surface-subtle/70 border border-border">
+              <div className="flex items-center justify-between p-3 rounded-xl bg-surface-subtle-70 border border-border">
                 <span className="font-bold text-text-primary">Stability AI / Replicate API Key</span>
                 <span className="font-mono text-text-muted">••••••••••••••••r8_Live77</span>
               </div>
@@ -359,7 +339,7 @@ export default function SystemSettingsPage() {
             </p>
             <button
               onClick={handleExportAuditLogs}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-primary text-btn-text text-xs font-bold shadow-md shadow-glow/20 hover:opacity-95 transition"
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-primary text-btn-text text-xs font-bold shadow-md shadow-glow-20 hover:opacity-95 transition"
             >
               <Download className="w-3.5 h-3.5" />
               <span>Export Audit CSV</span>
@@ -380,7 +360,7 @@ export default function SystemSettingsPage() {
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full">
-                  <thead className="border-b border-border bg-surface-subtle/70">
+                  <thead className="border-b border-border bg-surface-subtle-70">
                     <tr>
                       <th className="px-6 py-3.5 text-left text-xs font-black uppercase tracking-wider text-text-secondary">
                         Action
@@ -399,9 +379,9 @@ export default function SystemSettingsPage() {
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-border/60">
+                  <tbody className="divide-y divide-border-60">
                     {auditLogs.map((log) => (
-                      <tr key={log.id} className="hover:bg-surface-subtle/40 transition">
+                      <tr key={log.id} className="hover:bg-surface-subtle-40 transition">
                         <td className="px-6 py-4">
                           <span className="text-xs font-bold text-text-primary font-mono bg-surface-subtle px-2 py-0.5 rounded border border-border">
                             {log.action}
@@ -411,7 +391,7 @@ export default function SystemSettingsPage() {
                           {log.admin_id}
                         </td>
                         <td className="px-6 py-4 text-xs font-mono text-text-muted">
-                          {log.target_resource}
+                          {log.target_entity}
                         </td>
                         <td className="px-6 py-4 text-xs text-text-muted">
                           {new Date(log.created_at).toLocaleString()}
@@ -450,35 +430,35 @@ export default function SystemSettingsPage() {
         </div>
       )}
 
-      {/* JSON Payload Inspection Modal */}
-      {selectedLog && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="glass-panel rounded-3xl p-6 max-w-lg w-full shadow-2xl border border-border space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-border">
-              <div className="flex items-center gap-2">
-                <FileCode className="w-5 h-5 text-primary" />
-                <h2 className="text-base font-bold text-text-primary">Audit Log Metadata</h2>
-              </div>
-              <button
-                onClick={() => setSelectedLog(null)}
-                className="p-1 rounded-lg text-text-muted hover:text-text-primary"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-1 text-xs">
-              <div><strong>Action:</strong> {selectedLog.action}</div>
-              <div><strong>Actor:</strong> {selectedLog.admin_id}</div>
-              <div><strong>Target:</strong> {selectedLog.target_resource}</div>
-            </div>
-
-            <div className="p-3.5 rounded-xl bg-surface-subtle/80 border border-border font-mono text-xs text-text-primary overflow-x-auto max-h-60">
-              <pre>{JSON.stringify(selectedLog.details, null, 2)}</pre>
-            </div>
+      {/* Audit log payload — a record to read, so it gets a detail panel */}
+      <Drawer
+        open={!!selectedLog}
+        onClose={() => setSelectedLog(null)}
+        eyebrow="Audit Trail"
+        title="Log Metadata"
+        subtitle={selectedLog?.action}
+        avatar={
+          <div className="w-11 h-11 rounded-xl bg-primary-10 border border-primary-30 flex items-center justify-center text-primary shrink-0">
+            <FileCode className="w-5 h-5" />
           </div>
-        </div>
-      )}
+        }
+      >
+        {selectedLog && (
+          <>
+            <DrawerSection label="Event">
+              <DetailField label="Action" value={selectedLog.action} />
+              <DetailField label="Actor" value={selectedLog.admin_id} mono />
+              <DetailField label="Target" value={selectedLog.target_entity} />
+            </DrawerSection>
+
+            <DrawerSection label="JSON Payload">
+              <pre className="p-4 text-[11px] font-mono text-text-primary overflow-x-auto leading-relaxed">
+                {JSON.stringify(selectedLog.details, null, 2)}
+              </pre>
+            </DrawerSection>
+          </>
+        )}
+      </Drawer>
     </div>
   );
 }

@@ -16,6 +16,7 @@ import { supabase, isPlaceholderUrl } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { AppConfig } from '@socialpilot/types';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { Button } from '@/components/ui/Button';
 
 const DEFAULT_CONFIG: AppConfig = {
   id: '00000000-0000-0000-0000-000000000001',
@@ -148,14 +149,15 @@ export default function WhiteLabelPage() {
         </div>
 
         <div className="flex items-center gap-3">
-          <button
+          <Button
             type="button"
+            variant="secondary"
+            size="sm"
             onClick={handleResetDefaults}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-surface-subtle hover:bg-surface border border-border rounded-xl font-bold text-xs text-text-secondary hover:text-text-primary transition"
           >
             <RotateCcw className="w-3.5 h-3.5" />
             <span>Reset Baseline</span>
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -332,7 +334,7 @@ export default function WhiteLabelPage() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <label className="flex items-center justify-between p-3.5 rounded-xl border border-border bg-surface-subtle/60 cursor-pointer hover:border-active-50 transition">
+              <label className="flex items-center justify-between p-3.5 rounded-xl border border-border bg-surface-subtle-60 cursor-pointer hover:border-active-50 transition">
                 <span className="text-xs font-bold text-text-primary">RevenueCat IAP</span>
                 <input
                   type="checkbox"
@@ -342,7 +344,7 @@ export default function WhiteLabelPage() {
                 />
               </label>
 
-              <label className="flex items-center justify-between p-3.5 rounded-xl border border-border bg-surface-subtle/60 cursor-pointer hover:border-active-50 transition">
+              <label className="flex items-center justify-between p-3.5 rounded-xl border border-border bg-surface-subtle-60 cursor-pointer hover:border-active-50 transition">
                 <span className="text-xs font-bold text-text-primary">Social Login</span>
                 <input
                   type="checkbox"
@@ -352,7 +354,7 @@ export default function WhiteLabelPage() {
                 />
               </label>
 
-              <label className="flex items-center justify-between p-3.5 rounded-xl border border-border bg-surface-subtle/60 cursor-pointer hover:border-active-50 transition">
+              <label className="flex items-center justify-between p-3.5 rounded-xl border border-border bg-surface-subtle-60 cursor-pointer hover:border-active-50 transition">
                 <span className="text-xs font-bold text-danger">Maintenance Mode</span>
                 <input
                   type="checkbox"
@@ -364,14 +366,16 @@ export default function WhiteLabelPage() {
             </div>
           </div>
 
-          <button
+          <Button
             type="submit"
+            size="lg"
             disabled={isSaving}
-            className="w-full flex items-center justify-center gap-2 px-6 py-3.5 bg-gradient-primary text-btn-text font-black text-sm rounded-xl shadow-xl shadow-glow/25 hover:opacity-95 transition disabled:opacity-50"
+            loadingText="Synchronizing WebSockets..."
+            className="w-full"
           >
             <Save className="w-4 h-4" />
-            <span>{isSaving ? 'Synchronizing WebSockets...' : 'Save & Broadcast to Mobile App'}</span>
-          </button>
+            <span>Save & Broadcast to Mobile App</span>
+          </Button>
         </form>
 
         {/* Right Live Interactive Smartphone Mockup */}

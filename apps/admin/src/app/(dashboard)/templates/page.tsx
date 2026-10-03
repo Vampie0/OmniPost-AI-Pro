@@ -6,7 +6,6 @@ import {
   Plus,
   Trash2,
   Edit,
-  X,
   Search,
   Star,
   RefreshCw,
@@ -16,6 +15,8 @@ import { toast } from 'sonner';
 import { TemplateItem, PlatformType } from '@socialpilot/types';
 import { TableSkeleton } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Button } from '@/components/ui/Button';
+import { Modal } from '@/components/ui/Modal';
 
 const MOCK_TEMPLATES: TemplateItem[] = [
   {
@@ -328,20 +329,19 @@ export default function TemplatesCRUDPage() {
         </div>
 
         <div className="flex items-center gap-3">
-          <button
+          <Button
             onClick={loadTemplates}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-surface-subtle border border-border text-xs font-bold text-text-secondary hover:text-text-primary transition"
+            variant="secondary"
+            size="sm"
+            className="gap-1.5"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
             <span>Sync</span>
-          </button>
-          <button
-            onClick={openCreateModal}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-primary hover:opacity-95 text-btn-text rounded-xl font-bold text-xs shadow-md shadow-glow/20 transition"
-          >
+          </Button>
+          <Button onClick={openCreateModal} size="sm" className="gap-2">
             <Plus className="w-4 h-4" />
             <span>New Template</span>
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -430,7 +430,7 @@ export default function TemplatesCRUDPage() {
                 </div>
 
                 {/* Prompt preview box */}
-                <div className="bg-surface-subtle/80 p-3.5 rounded-xl border border-border text-xs text-text-secondary font-mono leading-relaxed max-h-32 overflow-y-auto mb-4">
+                <div className="bg-surface-subtle-80 p-3.5 rounded-xl border border-border text-xs text-text-secondary font-mono leading-relaxed max-h-32 overflow-y-auto mb-4">
                   {template.prompt_template}
                 </div>
 
@@ -452,19 +452,23 @@ export default function TemplatesCRUDPage() {
                 </span>
 
                 <div className="flex items-center gap-2">
-                  <button
+                  <Button
                     onClick={() => openEditModal(template)}
-                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-border bg-surface-subtle text-text-primary hover:border-active-50 transition"
+                    variant="secondary"
+                    size="sm"
+                    className="gap-1"
                   >
                     <Edit className="w-3.5 h-3.5" />
                     <span>Edit</span>
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     onClick={() => handleDeleteTemplate(template.id)}
-                    className="p-1.5 rounded-lg border border-danger-30 text-danger bg-danger-10 hover:bg-danger-20 transition"
+                    variant="ghost"
+                    size="sm"
+                    className="border border-danger-30 text-danger bg-danger-10 hover:bg-danger-20"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>
@@ -472,26 +476,20 @@ export default function TemplatesCRUDPage() {
         </div>
       )}
 
-      {/* Create / Edit Template Modal */}
-      {modalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="glass-panel rounded-3xl p-6 sm:p-8 max-w-xl w-full shadow-2xl border border-border space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-border">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-primary" />
-                <h2 className="text-base font-bold text-text-primary">
-                  {editingTemplate ? 'Edit Prompt Template' : 'Create AI Template'}
-                </h2>
-              </div>
-              <button
-                onClick={() => setModalOpen(false)}
-                className="p-1 rounded-lg text-text-muted hover:text-text-primary"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveTemplate} className="space-y-4">
+      {/* Create / Edit Template */}
+      <Modal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={editingTemplate ? 'Edit Prompt Template' : 'Create AI Template'}
+        description={
+          editingTemplate
+            ? 'Update the prompt the AI studio applies to this template.'
+            : 'Add a new prompt template to the library.'
+        }
+        icon={<Sparkles className="w-4 h-4" />}
+        size="lg"
+      >
+        <form onSubmit={handleSaveTemplate} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-text-secondary mb-1">
                   Template Title *
@@ -610,25 +608,25 @@ export default function TemplatesCRUDPage() {
               </div>
 
               <div className="pt-3 border-t border-border flex justify-end gap-3">
-                <button
+                <Button
                   type="button"
+                  variant="secondary"
+                  size="sm"
                   onClick={() => setModalOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-surface-subtle border border-border text-xs font-bold text-text-secondary hover:text-text-primary"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
                   type="submit"
+                  size="sm"
                   disabled={isSubmitting}
-                  className="px-5 py-2 rounded-xl bg-gradient-primary text-btn-text text-xs font-bold hover:opacity-95 transition disabled:opacity-50"
+                  loadingText="Saving..."
                 >
-                  {isSubmitting ? 'Saving...' : editingTemplate ? 'Update Template' : 'Publish Template'}
-                </button>
+                  {editingTemplate ? 'Update Template' : 'Publish Template'}
+                </Button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </Modal>
     </div>
   );
 }

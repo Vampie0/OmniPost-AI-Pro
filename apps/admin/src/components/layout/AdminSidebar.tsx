@@ -3,6 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
   Activity,
   Users,
@@ -13,6 +14,7 @@ import {
   Palette,
   Bot,
   Bell,
+  Database,
   Settings,
   LogOut,
   ChevronLeft,
@@ -34,6 +36,7 @@ export const NAV_ITEMS = [
   { label: 'AI Configuration', href: '/ai-settings', icon: Bot },
   { label: 'Push Notifications', href: '/notifications', icon: Bell },
   { label: 'System & Audit Logs', href: '/settings', icon: Settings },
+  { label: 'Connection Diagnostics', href: '/test-connection', icon: Database },
 ];
 
 interface AdminSidebarProps {
@@ -69,7 +72,7 @@ export function AdminSidebar({
         isCollapsed ? 'justify-center' : ''
       }`}>
         <Link href="/" className="flex items-center gap-3 overflow-hidden">
-          <div className="w-9 h-9 rounded-xl bg-gradient-primary flex items-center justify-center shrink-0 shadow-md shadow-glow/20">
+          <div className="w-9 h-9 rounded-xl bg-gradient-primary flex items-center justify-center shrink-0 shadow-md shadow-glow-20">
             <Sparkles className="w-5 h-5 text-btn-text" />
           </div>
           {!isCollapsed && (
@@ -111,7 +114,7 @@ export function AdminSidebar({
               className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition group relative ${
                 isActive
                   ? 'bg-surface-subtle text-text-primary border border-active shadow-sm'
-                  : 'text-text-secondary hover:text-text-primary hover:bg-surface-subtle/70'
+                  : 'text-text-secondary hover:text-text-primary hover:bg-surface-subtle-70'
               } ${isCollapsed ? 'justify-center px-2' : ''}`}
             >
               <Icon
@@ -149,7 +152,7 @@ export function AdminSidebar({
       {/* Footer Profile & Logout */}
       <div className="p-3 border-t border-border space-y-2">
         {!isCollapsed && (
-          <div className="flex items-center gap-2.5 p-2 rounded-xl bg-surface-subtle/50 border border-border/60">
+          <div className="flex items-center gap-2.5 p-2 rounded-xl bg-surface-subtle-50 border border-border-60">
             <div className="w-7 h-7 rounded-lg bg-primary-10 text-primary flex items-center justify-center shrink-0 font-black text-xs">
               SA
             </div>
@@ -186,20 +189,30 @@ export function AdminSidebar({
         {sidebarContent}
       </aside>
 
-      {/* Mobile Drawer Backdrop & Drawer */}
-      {isMobileOpen && (
-        <div
-          className="md:hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm transition-opacity"
-          onClick={() => setIsMobileOpen(false)}
-        >
-          <div
-            className="w-72 h-full shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
+      {/* Mobile nav drawer — slides in instead of popping */}
+      <AnimatePresence>
+        {isMobileOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.22 }}
+            className="md:hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
+            onClick={() => setIsMobileOpen(false)}
           >
-            {sidebarContent}
-          </div>
-        </div>
-      )}
+            <motion.div
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+              className="w-72 h-full shadow-card-hover"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {sidebarContent}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   );
 }

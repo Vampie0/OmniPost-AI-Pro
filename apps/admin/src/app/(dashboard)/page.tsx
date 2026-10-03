@@ -26,11 +26,25 @@ import {
   Tooltip,
   CartesianGrid,
 } from 'recharts';
+import { useTheme } from '@/theme/useTheme';
 import { supabase, isPlaceholderUrl } from '@/lib/supabase';
 import { StatCardSkeleton } from '@/components/ui/Skeleton';
 import { toast } from 'sonner';
 
-const REVENUE_CHART_DATA = [
+// Tier → monthly price mapping (mirrors the Subscriptions page MRR model)
+const TIER_MRR: Record<string, number> = { free: 0, starter: 19, pro: 49, agency: 199 };
+
+const PLATFORM_META: { key: string; label: string; color: string }[] = [
+  { key: 'instagram', label: 'Instagram', color: '#E1306C' },
+  { key: 'twitter', label: 'Twitter/X', color: '#1DA1F2' },
+  { key: 'linkedin', label: 'LinkedIn', color: '#0A66C2' },
+  { key: 'facebook', label: 'Facebook', color: '#1877F2' },
+  { key: 'tiktok', label: 'TikTok', color: '#FF0050' },
+  { key: 'threads', label: 'Threads', color: '#8E95A5' },
+];
+
+// Demo series only used in placeholder/mock mode (NEXT_PUBLIC_USE_MOCK=true)
+const DEMO_REVENUE_CHART_DATA = [
   { month: 'Jan', mrr: 1200, users: 140 },
   { month: 'Feb', mrr: 1550, users: 190 },
   { month: 'Mar', mrr: 1900, users: 230 },
@@ -39,21 +53,33 @@ const REVENUE_CHART_DATA = [
   { month: 'Jun', mrr: 2840, users: 342 },
 ];
 
-const PLATFORM_POST_DATA = [
+const DEMO_PLATFORM_POST_DATA = [
   { platform: 'Instagram', posts: 1840, color: '#E1306C' },
   { platform: 'Twitter/X', posts: 1420, color: '#1DA1F2' },
   { platform: 'LinkedIn', posts: 950, color: '#0A66C2' },
   { platform: 'TikTok', posts: 610, color: '#FF0050' },
 ];
 
+interface RevenuePoint { month: string; mrr: number; users: number }
+interface PlatformPoint { platform: string; posts: number; color: string }
+
 export default function DashboardOverviewPage() {
+  const { colors } = useTheme();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
-    totalUsers: 342,
-    totalPosts: 4820,
-    mrr: '$2,840',
-    tokensBurned: '1.84M',
+    totalUsers: 0,
+    totalPosts: 0,
+    newThisWeek: 0,
+    mrr: '$0',
+    tokensBurned: '0',
   });
+  const [revenueData, setRevenueData] = useState<RevenuePoint[]>(
+    isPlaceholderUrl ? DEMO_REVENUE_CHART_DATA : []
+  );
+  const [platformData, setPlatformData] = useState<PlatformPoint[]>(
+    isPlaceholderUrl ? DEMO_PLATFORM_POST_DATA : []
+  );
+  const [momGrowth, setMomGrowth] = useState<number | null>(null);
 
   const loadDashboardData = async () => {
     try {
@@ -64,17 +90,61 @@ export default function DashboardOverviewPage() {
         return;
       }
 
-      const [usersRes, postsRes] = await Promise.all([
+      const [usersRes, postsRes, profilesRes, logsRes, postsPlatRes] = await Promise.all([
         supabase.from('profiles').select('id', { count: 'exact', head: true }),
         supabase.from('posts').select('id', { count: 'exact', head: true }),
+        supabase.from('profiles').select('subscription_tier, created_at'),
+        supabase.from('ai_logs').select('tokens_used'),
+        supabase.from('posts').select('platforms'),
       ]);
 
+      const profiles = (profilesRes.data || []) as { subscription_tier: string | null; created_at: string | null }[];
+
+      const mrrSum = profiles.reduce((s, p) => s + (TIER_MRR[p.subscription_tier || 'free'] ?? 0), 0);
+      // Tokens across logged generations (fetched rows are real, capped by PostgREST page size)
+      const tokensSum = ((logsRes.data || []) as { tokens_used: number | null }[])
+        .reduce((s, l) => s + (l.tokens_used || 0), 0);
+
+      const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      const newThisWeek = profiles.filter((p) => p.created_at && new Date(p.created_at).getTime() >= weekAgo).length;
+
       setStats({
-        totalUsers: usersRes.count ?? 342,
-        totalPosts: postsRes.count ?? 4820,
-        mrr: '$2,840',
-        tokensBurned: '1.84M',
+        totalUsers: usersRes.count ?? 0,
+        totalPosts: postsRes.count ?? 0,
+        newThisWeek,
+        mrr: `$${mrrSum.toLocaleString()}`,
+        tokensBurned: tokensSum.toLocaleString(),
       });
+
+      // Real MRR/user acceleration over the last 6 months (cumulative sign-ups)
+      const now = new Date();
+      const series: RevenuePoint[] = [];
+      for (let i = 5; i >= 0; i--) {
+        const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
+        const upto = profiles.filter((p) => p.created_at && new Date(p.created_at) <= end);
+        series.push({
+          month: end.toLocaleString('en-US', { month: 'short' }),
+          mrr: upto.reduce((s, p) => s + (TIER_MRR[p.subscription_tier || 'free'] ?? 0), 0),
+          users: upto.length,
+        });
+      }
+      setRevenueData(series);
+      const prev = series[4]?.mrr ?? 0;
+      const cur = series[5]?.mrr ?? 0;
+      setMomGrowth(prev > 0 ? Math.round(((cur - prev) / prev) * 1000) / 10 : null);
+
+      // Real per-platform post volume from posts.platforms arrays
+      const counts: Record<string, number> = {};
+      for (const row of (postsPlatRes.data || []) as { platforms: string[] | null }[]) {
+        for (const p of row.platforms || []) {
+          counts[p] = (counts[p] || 0) + 1;
+        }
+      }
+      setPlatformData(
+        PLATFORM_META
+          .map((m) => ({ platform: m.label, posts: counts[m.key] || 0, color: m.color }))
+          .filter((row) => row.posts > 0)
+      );
     } catch {
       toast.error('Failed to refresh dashboard stats');
     } finally {
@@ -136,8 +206,9 @@ export default function DashboardOverviewPage() {
             <div className="text-2xl sm:text-3xl font-black text-text-primary">
               {stats.totalUsers}
             </div>
-            <div className="text-xs text-success font-semibold mt-1 flex items-center gap-1">
-              <ArrowUpRight className="w-3.5 h-3.5" /> +12% this week
+            <div className={`text-xs font-semibold mt-1 flex items-center gap-1 ${stats.newThisWeek > 0 ? 'text-success' : 'text-text-muted'}`}>
+              {stats.newThisWeek > 0 && <ArrowUpRight className="w-3.5 h-3.5" />}
+              {stats.newThisWeek > 0 ? `+${stats.newThisWeek} new this week` : 'No new sign-ups this week'}
             </div>
           </div>
 
@@ -153,8 +224,11 @@ export default function DashboardOverviewPage() {
             <div className="text-2xl sm:text-3xl font-black text-text-primary">
               {stats.mrr}
             </div>
-            <div className="text-xs text-success font-semibold mt-1 flex items-center gap-1">
-              <ArrowUpRight className="w-3.5 h-3.5" /> +18.4% growth
+            <div className={`text-xs font-semibold mt-1 flex items-center gap-1 ${momGrowth !== null && momGrowth >= 0 ? 'text-success' : 'text-text-muted'}`}>
+              {momGrowth !== null && momGrowth >= 0 && <ArrowUpRight className="w-3.5 h-3.5" />}
+              {momGrowth !== null
+                ? `${momGrowth >= 0 ? '+' : ''}${momGrowth}% MoM growth`
+                : stats.mrr !== '$0' ? 'New revenue this month' : 'No paid subscriptions yet'}
             </div>
           </div>
 
@@ -188,7 +262,7 @@ export default function DashboardOverviewPage() {
               {stats.tokensBurned}
             </div>
             <div className="text-xs text-text-muted font-semibold mt-1">
-              Gemini 1.5 Pro & SDXL
+              All logged AI generations
             </div>
           </div>
         </div>
@@ -209,36 +283,40 @@ export default function DashboardOverviewPage() {
               </p>
             </div>
             <span className="text-xs font-bold text-primary bg-primary-10 border border-border-active-30 px-2.5 py-1 rounded-lg">
-              +18.4% MoM
+              {momGrowth !== null ? `${momGrowth >= 0 ? '+' : ''}${momGrowth}% MoM` : 'No MoM change yet'}
             </span>
           </div>
 
           <div className="h-72 w-full">
+            {revenueData.length === 0 ? (
+              <p className="text-xs text-text-muted py-10 text-center">No subscription history recorded yet.</p>
+            ) : (
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={REVENUE_CHART_DATA} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <AreaChart data={revenueData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <defs>
                   <linearGradient id="colorMrr" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="var(--color-primary, #4F46E5)" stopOpacity={0.4} />
-                    <stop offset="95%" stopColor="var(--color-primary, #4F46E5)" stopOpacity={0} />
+                    <stop offset="5%" stopColor={colors.primary} stopOpacity={0.4} />
+                    <stop offset="95%" stopColor={colors.primary} stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
                 <XAxis dataKey="month" stroke="var(--color-text-muted)" fontSize={12} tickLine={false} />
                 <YAxis stroke="var(--color-text-muted)" fontSize={12} tickLine={false} tickFormatter={(val) => `$${val}`} />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: 'var(--color-surface, #0F172A)',
-                    borderColor: 'var(--color-border, #334155)',
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border,
                     borderRadius: '0.75rem',
-                    color: 'var(--color-text-primary, #FFFFFF)',
+                    color: colors.textPrimary,
                     fontSize: '12px',
                   }}
-                  labelStyle={{ color: 'var(--color-text-primary, #FFFFFF)', fontWeight: 600 }}
-                  itemStyle={{ color: 'var(--color-text-primary, #FFFFFF)' }}
+                  labelStyle={{ color: colors.textPrimary, fontWeight: 600 }}
+                  itemStyle={{ color: colors.textPrimary }}
                 />
-                <Area type="monotone" dataKey="mrr" stroke="var(--color-primary, #4F46E5)" strokeWidth={3} fillOpacity={1} fill="url(#colorMrr)" name="MRR ($)" />
+                <Area type="monotone" dataKey="mrr" stroke={colors.primary} strokeWidth={3} fillOpacity={1} fill="url(#colorMrr)" name="MRR ($)" />
               </AreaChart>
             </ResponsiveContainer>
+            )}
           </div>
         </div>
 
@@ -255,29 +333,33 @@ export default function DashboardOverviewPage() {
           </div>
 
           <div className="h-56 w-full my-4">
+            {platformData.length === 0 ? (
+              <p className="text-xs text-text-muted py-10 text-center">No posts generated yet.</p>
+            ) : (
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={PLATFORM_POST_DATA} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
+              <BarChart data={platformData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
                 <XAxis dataKey="platform" stroke="var(--color-text-muted)" fontSize={11} tickLine={false} />
                 <YAxis stroke="var(--color-text-muted)" fontSize={11} tickLine={false} />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: 'var(--color-surface, #0F172A)',
-                    borderColor: 'var(--color-border, #334155)',
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border,
                     borderRadius: '0.75rem',
-                    color: 'var(--color-text-primary, #FFFFFF)',
+                    color: colors.textPrimary,
                     fontSize: '12px',
                   }}
-                  labelStyle={{ color: 'var(--color-text-primary, #FFFFFF)', fontWeight: 600 }}
-                  itemStyle={{ color: 'var(--color-text-primary, #FFFFFF)' }}
+                  labelStyle={{ color: colors.textPrimary, fontWeight: 600 }}
+                  itemStyle={{ color: colors.textPrimary }}
                 />
-                <Bar dataKey="posts" fill="var(--color-primary, #4F46E5)" radius={[6, 6, 0, 0]} name="Posts" />
+                <Bar dataKey="posts" fill={colors.primary} radius={[6, 6, 0, 0]} name="Posts" />
               </BarChart>
             </ResponsiveContainer>
+            )}
           </div>
 
           <div className="pt-3 border-t border-border flex items-center justify-between text-xs text-text-secondary">
-            <span>Total: 4,820 posts</span>
+            <span>Total: {stats.totalPosts.toLocaleString()} posts</span>
             <Link href="/posts" className="text-primary font-bold hover:underline flex items-center gap-1">
               <span>Moderate</span>
               <ArrowUpRight className="w-3 h-3" />
@@ -321,11 +403,11 @@ export default function DashboardOverviewPage() {
               </h2>
             </div>
             <span className="text-xs font-bold text-success bg-success-10 px-2.5 py-0.5 rounded-full border border-success-30">
-              Gemini 1.5 Pro
+              Configurable
             </span>
           </div>
           <p className="text-xs text-text-secondary leading-relaxed">
-            Copywriting Engine: <strong>Gemini 1.5 Pro</strong>. Visual Synthesis: <strong>Stability SDXL</strong>.
+            Text &amp; image models are set centrally in AI Settings (default: Gemini 2.0 Flash + SDXL via Replicate).
           </p>
           <Link
             href="/ai-settings"

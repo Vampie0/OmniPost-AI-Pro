@@ -15,7 +15,7 @@ export default function GlobalError({
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: 'var(--color-bg, #06070B)',
-        color: 'var(--color-text-primary, #F8FAFC)',
+        color: 'var(--color-text-primary, #FFFFFF)',
         fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif',
       }}>
         <div style={{ textAlign: 'center' }}>

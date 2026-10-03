@@ -18,7 +18,6 @@ import {
   Download,
   CheckCircle2,
   RefreshCw,
-  X,
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
@@ -27,6 +26,8 @@ import { toast } from 'sonner';
 import { exportToCsv } from '@/lib/csv';
 import { TableSkeleton } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Button } from '@/components/ui/Button';
+import { Modal } from '@/components/ui/Modal';
 
 interface SubscriberRow {
   id: string;
@@ -169,6 +170,16 @@ export default function SubscriptionsPage() {
     });
   }, [subscribers, tierFilter]);
 
+  // Real per-tier counts from loaded subscribers (demo counts kept in mock mode)
+  const tierCounts = useMemo(() => {
+    const counts: Record<string, number> = { Free: 0, Starter: 0, Pro: 0, Agency: 0 };
+    for (const s of subscribers) {
+      const key = s.tier.charAt(0).toUpperCase() + s.tier.slice(1);
+      counts[key] = (counts[key] ?? 0) + 1;
+    }
+    return counts;
+  }, [subscribers]);
+
   const handleGrantCredits = async () => {
     if (!selectedSub) return;
     try {
@@ -295,17 +306,19 @@ export default function SubscriptionsPage() {
           const s = row.original;
           return (
             <div className="text-right">
-              <button
+              <Button
                 onClick={() => {
                   setSelectedSub(s);
                   setCreditAmount(1000);
                   setCreditModalOpen(true);
                 }}
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-surface-subtle hover:bg-surface border border-border hover:border-active-50 text-xs font-bold text-text-primary transition"
+                variant="secondary"
+                size="sm"
+                className="gap-1"
               >
                 <Coins className="w-3.5 h-3.5 text-warning" />
                 <span>Add Credits</span>
-              </button>
+              </Button>
             </div>
           );
         },
@@ -339,25 +352,28 @@ export default function SubscriptionsPage() {
             <span>Subscriptions & Revenue Command</span>
           </h1>
           <p className="text-xs sm:text-sm text-text-secondary mt-1">
-            Manage customer tier allocations, credit limits, and RevenueCat automated billing
+            Manage customer tier allocations and AI credit balances
           </p>
         </div>
 
         <div className="flex items-center gap-3">
-          <button
+          <Button
             onClick={loadSubscribers}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-surface-subtle border border-border text-xs font-bold text-text-secondary hover:text-text-primary transition"
+            variant="secondary"
+            size="sm"
+            className="gap-1.5"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
             <span>Sync</span>
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={handleExportCsv}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-primary text-btn-text text-xs font-bold shadow-md shadow-glow/20 hover:opacity-95 transition"
+            size="sm"
+            className="gap-1.5"
           >
             <Download className="w-3.5 h-3.5" />
             <span>Export CSV</span>
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -371,14 +387,14 @@ export default function SubscriptionsPage() {
                   {tier.name}
                 </span>
                 <span className="text-xs font-bold text-text-secondary">
-                  {tier.activeCount} active
+                  {isPlaceholderUrl ? tier.activeCount : tierCounts[tier.name] ?? 0} active
                 </span>
               </div>
               <div className="text-2xl font-black text-text-primary mt-1">{tier.price}<span className="text-xs text-text-muted">/mo</span></div>
               <p className="text-xs text-text-muted mt-1">{tier.limit}</p>
             </div>
             <div className="pt-3 mt-3 border-t border-border flex items-center justify-between text-[11px] text-text-secondary">
-              <span>Auto Token Refresh</span>
+              <span>Manual Credit Grants</span>
               <CheckCircle2 className="w-3.5 h-3.5 text-success" />
             </div>
           </div>
@@ -428,7 +444,7 @@ export default function SubscriptionsPage() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="border-b border-border bg-surface-subtle/70">
+              <thead className="border-b border-border bg-surface-subtle-70">
                 {table.getHeaderGroups().map((headerGroup) => (
                   <tr key={headerGroup.id}>
                     {headerGroup.headers.map((header) => (
@@ -444,9 +460,9 @@ export default function SubscriptionsPage() {
                   </tr>
                 ))}
               </thead>
-              <tbody className="divide-y divide-border/60">
+              <tbody className="divide-y divide-border-60">
                 {table.getRowModel().rows.map((row) => (
-                  <tr key={row.id} className="hover:bg-surface-subtle/40 transition">
+                  <tr key={row.id} className="hover:bg-surface-subtle-40 transition">
                     {row.getVisibleCells().map((cell) => (
                       <td key={cell.id} className="px-6 py-4">
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -487,24 +503,39 @@ export default function SubscriptionsPage() {
       </div>
 
       {/* Modal: Manual Add Credits */}
-      {creditModalOpen && selectedSub && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="glass-panel rounded-3xl p-6 max-w-md w-full shadow-2xl border border-border space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-border">
-              <div className="flex items-center gap-2">
-                <Coins className="w-5 h-5 text-warning" />
-                <h2 className="text-base font-bold text-text-primary">Grant AI Credits</h2>
-              </div>
-              <button
-                onClick={() => setCreditModalOpen(false)}
-                className="p-1 rounded-lg text-text-muted hover:text-text-primary"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
+      <Modal
+        open={creditModalOpen}
+        onClose={() => setCreditModalOpen(false)}
+        title="Grant AI Credits"
+        description={selectedSub?.email}
+        icon={<Coins className="w-4 h-4" />}
+        footer={
+          <>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => setCreditModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={isUpdating}
+              onClick={handleGrantCredits}
+              loadingText="Adding..."
+            >
+              Grant Credits Now
+            </Button>
+          </>
+        }
+      >
+        {selectedSub && (
+          <>
             <p className="text-xs text-text-secondary">
-              Granting immediate AI generation tokens to <strong className="text-text-primary">{selectedSub.email}</strong>.
+              Granting immediate AI generation tokens to{' '}
+              <strong className="text-text-primary">{selectedSub.email}</strong>.
             </p>
 
             <div>
@@ -525,33 +556,15 @@ export default function SubscriptionsPage() {
                   key={preset}
                   type="button"
                   onClick={() => setCreditAmount(preset)}
-                  className="flex-1 py-1.5 rounded-lg bg-surface-subtle border border-border hover:border-active-50 text-xs font-bold text-text-primary transition"
+                  className="flex-1 py-1.5 rounded-lg bg-surface-subtle border border-border hover:border-active-50 hover:bg-surface-subtle-70 text-xs font-bold text-text-primary transition-all duration-200 ease-quint-out active:scale-[0.97]"
                 >
                   +{preset}
                 </button>
               ))}
             </div>
-
-            <div className="pt-2 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setCreditModalOpen(false)}
-                className="px-4 py-2 rounded-xl bg-surface-subtle border border-border text-xs font-bold text-text-secondary hover:text-text-primary"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={isUpdating}
-                onClick={handleGrantCredits}
-                className="px-5 py-2 rounded-xl bg-gradient-primary text-btn-text text-xs font-bold hover:opacity-95 transition disabled:opacity-50"
-              >
-                {isUpdating ? 'Adding...' : 'Grant Credits Now'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </Modal>
     </div>
   );
 }
