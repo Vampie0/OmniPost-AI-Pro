@@ -1,0 +1,47 @@
+SocialPilot AI Pro — Share Copy
+(Designs & builds: Ali Aslam · @vampie)
+
+============================================================
+VERSION 1 · PUNCHY ONE-LINER
+(use for X / LinkedIn posts, forum signatures, DM intros)
+============================================================
+
+------------------------------------------------------------
+PRIMARY (recommended):
+------------------------------------------------------------
+
+"SocialPilot AI Pro — a finished AI social-media SaaS: 41 screens across iOS, Android and a full web admin, shown feature-for-feature in this 6-minute walkthrough. Designed & built end to end by Ali Aslam · @vampie."
+
+------------------------------------------------------------
+SHORTER VARIANT:
+------------------------------------------------------------
+
+"41 screens · 3 platforms · 1 AI engine. SocialPilot AI Pro — the complete AI social-media SaaS, walkthrough video inside. By Ali Aslam · @vampie."
+
+============================================================
+VERSION 2 · MARKETPLACE DESCRIPTION (3–5 lines)
+(for Contra / Gumroad / product listing pages)
+============================================================
+
+SocialPilot AI Pro — production-ready AI social media SaaS:
+mobile app (iOS + Android, one Expo codebase), full white-label
+admin panel (Next.js), and Supabase backend with AI content +
+image generation for 5 platforms.
+
+Every feature is shown in the 6-minute walkthrough video —
+auth, AI studio, calendar, analytics, teams, subscriptions,
+notifications, settings, admin user management, templates,
+white-label studio, and more. 41 screens, zero stubs.
+
+Delivered as a complete Turborepo monorepo with documented
+setup. Customization available on purchase — branding, extra
+features, platform additions.
+
+Designed & built, end to end by Ali Aslam · @vampie
+Apps · Websites · POS systems — for iOS, Android, macOS & Web
+
+DM for a live demo · tell me what you want changed — I'll build it.
+
+Contact: WhatsApp 03036112299 · aliaslam7770@gmail.com ·
+alibhatti6382@gmail.com · github.com/Vampie0 ·
+linkedin.com/in/ali-aslam-586683259

@@ -1,0 +1,1524 @@
+<!doctype html>
+<html lang="en" data-resolution="landscape">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=1920, height=1080" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { width:1920px; height:1080px; overflow:hidden; background:#06070B; font-family:'Inter',system-ui,sans-serif; color:#fff; -webkit-font-smoothing:antialiased; }
+
+/* ============ Global stage & scene shell ============ */
+#root { position:relative; width:1920px; height:1080px; overflow:hidden; background:#06070B; }
+.scene { position:absolute; inset:0; opacity:0; pointer-events:none; overflow:hidden; }
+.scene.active { opacity:1; }
+.stage-bg { position:absolute; inset:0; background:linear-gradient(135deg, #141724 0%, #06070B 40%, #000 100%); }
+.grid-bg { position:absolute; inset:0; background-image:linear-gradient(rgba(255,255,255,.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.04) 1px, transparent 1px); background-size:60px 60px; }
+.glow { display:none; } /* disabled — was filter:blur and caused heavy-overlay black-frame capture */
+
+/* Caption (top-center) */
+.caption { position:absolute; top:60px; left:50%; transform:translateX(-50%); text-align:center; z-index:20; }
+.caption .kicker { font-size:14px; letter-spacing:.35em; color:#FFAE00; font-weight:600; text-transform:uppercase; margin-bottom:10px; }
+.caption .title { font-size:38px; font-weight:800; letter-spacing:-.02em; color:#fff; }
+.caption .sub { font-size:16px; color:#8E95A5; margin-top:6px; font-weight:500; }
+
+/* Side rail callouts */
+.callouts { position:absolute; left:80px; top:220px; width:360px; display:flex; flex-direction:column; gap:20px; z-index:15; }
+.callouts.right { left:auto; right:80px; }
+.callout { padding:16px 20px; background:rgba(12,14,23,.9); border:1px solid rgba(255,255,255,.08); border-radius:14px; }
+.callout .lbl { font-size:11px; color:#FFAE00; letter-spacing:.25em; font-weight:700; text-transform:uppercase; margin-bottom:6px; }
+.callout .txt { font-size:16px; color:#fff; font-weight:600; line-height:1.4; }
+.callout .hint { font-size:13px; color:#8E95A5; margin-top:4px; }
+
+/* Device frames */
+.device { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); }
+
+/* iPhone 15 Pro (dynamic island) */
+.iphone { width:390px; height:844px; background:#0C0E17; border-radius:56px; padding:14px; box-shadow:0 0 0 2px #1F2233, 0 0 0 12px #000, 0 60px 120px rgba(255,94,58,.18), 0 40px 80px rgba(0,0,0,.6); }
+.iphone .screen { position:relative; width:100%; height:100%; background:#06070B; border-radius:44px; overflow:hidden; }
+.iphone .island { position:absolute; top:12px; left:50%; transform:translateX(-50%); width:120px; height:34px; background:#000; border-radius:20px; z-index:10; }
+.iphone .statusbar { position:absolute; top:0; left:0; right:0; height:54px; display:flex; align-items:center; justify-content:space-between; padding:0 32px; font-size:15px; font-weight:600; color:#fff; z-index:9; }
+.iphone .home-bar { position:absolute; bottom:8px; left:50%; transform:translateX(-50%); width:140px; height:5px; background:#fff; border-radius:3px; opacity:.4; z-index:9; }
+
+/* Android (punch-hole + nav bar) */
+.android { width:400px; height:860px; background:#0C0E17; border-radius:44px; padding:12px; box-shadow:0 0 0 2px #263, 0 0 0 12px #000, 0 60px 120px rgba(0,245,160,.15), 0 40px 80px rgba(0,0,0,.6); }
+.android .screen { position:relative; width:100%; height:100%; background:#06070B; border-radius:36px; overflow:hidden; }
+.android .punch { position:absolute; top:20px; left:50%; transform:translateX(-50%); width:14px; height:14px; background:#000; border-radius:50%; z-index:10; }
+.android .statusbar { position:absolute; top:0; left:0; right:0; height:44px; display:flex; align-items:center; justify-content:space-between; padding:0 26px; font-size:13px; font-weight:600; color:#fff; z-index:9; }
+.android .navbar { position:absolute; bottom:0; left:0; right:0; height:36px; display:flex; align-items:center; justify-content:center; gap:60px; z-index:9; }
+.android .navbar span { width:12px; height:12px; border:1.5px solid #fff; opacity:.55; }
+.android .navbar .back { transform:rotate(45deg); width:10px; height:10px; }
+.android .navbar .home { border-radius:50%; }
+.android .navbar .recents { border-radius:2px; width:14px; height:14px; }
+
+/* Browser (macOS Chrome style) */
+.browser { width:1400px; height:820px; background:#0C0E17; border-radius:14px; overflow:hidden; box-shadow:0 0 0 1px rgba(255,255,255,.08), 0 60px 120px rgba(0,0,0,.7), 0 30px 60px rgba(255,94,58,.1); transform:translate(-50%,-50%) scale(.85); left:50%; top:50%; position:absolute; }
+.browser .chrome { height:44px; background:#0F1220; display:flex; align-items:center; padding:0 16px; gap:12px; border-bottom:1px solid rgba(255,255,255,.06); }
+.browser .dots { display:flex; gap:8px; }
+.browser .dot { width:12px; height:12px; border-radius:50%; }
+.browser .dot.red { background:#FF5F57; } .browser .dot.yellow { background:#FEBC2E; } .browser .dot.green { background:#28C840; }
+.browser .urlbar { flex:1; max-width:520px; margin-left:20px; background:#06070B; height:28px; border-radius:8px; display:flex; align-items:center; padding:0 12px; gap:8px; font-size:13px; color:#8E95A5; font-family:'JetBrains Mono',monospace; border:1px solid rgba(255,255,255,.06); }
+.browser .urlbar .lock { color:#00F5A0; font-size:12px; }
+.browser .viewport { height:calc(100% - 44px); background:#06070B; overflow:hidden; position:relative; }
+/* Generic app UI atoms */
+.ui { position:absolute; inset:0; padding:0; font-size:14px; color:#fff; }
+.app-header { padding:60px 22px 12px; }
+.iphone .app-header { padding-top:60px; }
+.android .app-header { padding-top:52px; }
+.app-header .h1 { font-size:26px; font-weight:800; letter-spacing:-.02em; }
+.app-header .sub { font-size:13px; color:#8E95A5; margin-top:2px; }
+.card { background:rgba(20,23,36,.85); border:1px solid rgba(255,255,255,.08); border-radius:16px; padding:14px; }
+.card.accent { border-color:rgba(255,94,58,.35); background:linear-gradient(135deg, rgba(255,94,58,.08), rgba(12,14,23,.85)); }
+.badge { display:inline-block; padding:3px 8px; border-radius:6px; font-size:10px; font-weight:700; letter-spacing:.05em; }
+.badge.orange { background:rgba(255,174,0,.14); color:#FFAE00; border:1px solid rgba(255,174,0,.35); }
+.badge.green { background:rgba(0,245,160,.14); color:#00F5A0; border:1px solid rgba(0,245,160,.35); }
+.badge.pink { background:rgba(255,56,92,.14); color:#FF385C; border:1px solid rgba(255,56,92,.35); }
+.btn { display:inline-flex; align-items:center; justify-content:center; gap:6px; padding:12px 18px; border-radius:12px; font-weight:700; font-size:14px; }
+.btn.primary { background:linear-gradient(135deg,#FF5E3A,#FFAE00); color:#06070B; }
+.btn.ghost { background:rgba(255,255,255,.06); color:#fff; border:1px solid rgba(255,255,255,.08); }
+.input { background:rgba(12,14,23,.85); border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:12px 14px; color:#8E95A5; font-size:14px; }
+.input.filled { color:#fff; border-color:rgba(255,94,58,.5); }
+.tabbar { position:absolute; bottom:22px; left:12px; right:12px; height:64px; background:rgba(12,14,23,.97); border-top:1px solid rgba(255,255,255,.06); border-radius:20px; display:flex; align-items:center; justify-content:space-around; }
+.tabbar .tab { color:#606778; font-size:10px; font-weight:600; text-align:center; display:flex; flex-direction:column; align-items:center; gap:3px; }
+.tabbar .tab.on { color:#FF5E3A; }
+.tabbar .tab .ico { width:22px; height:22px; border-radius:6px; background:currentColor; opacity:.55; }
+.tabbar .tab.on .ico { opacity:1; box-shadow:0 0 20px rgba(255,94,58,.6); }
+
+/* Stat cards */
+.stat-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; padding:0 22px; }
+.stat { background:rgba(20,23,36,.85); border:1px solid rgba(255,255,255,.08); border-radius:14px; padding:14px; }
+.stat .k { font-size:11px; color:#8E95A5; font-weight:600; letter-spacing:.05em; text-transform:uppercase; }
+.stat .v { font-size:24px; font-weight:800; margin-top:2px; }
+.stat .d { font-size:11px; color:#00F5A0; margin-top:2px; }
+.stat.pulse .v { color:#FFAE00; }
+
+/* Post cards */
+.post-list { padding:12px 22px 100px; display:flex; flex-direction:column; gap:10px; }
+.post { padding:12px 14px; background:rgba(20,23,36,.7); border:1px solid rgba(255,255,255,.06); border-radius:14px; }
+.post .head { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+.post .plat { font-size:11px; font-weight:700; letter-spacing:.05em; color:#8E95A5; }
+.post .body { font-size:12px; color:#fff; line-height:1.4; }
+.post .foot { display:flex; gap:12px; font-size:10px; color:#606778; margin-top:6px; }
+
+/* Admin panel atoms */
+.admin { display:grid; grid-template-columns:240px 1fr; height:100%; }
+.admin-side { background:#0A0D16; border-right:1px solid rgba(255,255,255,.06); padding:20px 14px; overflow:hidden; }
+.admin-side .brand { display:flex; align-items:center; gap:10px; padding:6px 8px 20px; }
+.admin-side .brand .logo { width:32px; height:32px; border-radius:8px; background:linear-gradient(135deg,#FF5E3A,#FFAE00); display:flex; align-items:center; justify-content:center; font-weight:900; color:#06070B; }
+.admin-side .brand .name { font-weight:800; font-size:14px; }
+.admin-nav { display:flex; flex-direction:column; gap:2px; }
+.admin-nav .item { padding:9px 12px; border-radius:8px; font-size:13px; color:#8E95A5; font-weight:500; display:flex; align-items:center; gap:10px; }
+.admin-nav .item.on { background:rgba(255,94,58,.1); color:#FF5E3A; font-weight:700; border-left:2px solid #FF5E3A; margin-left:-2px; }
+.admin-nav .item .ico { width:16px; height:16px; border-radius:4px; background:currentColor; opacity:.4; }
+.admin-main { background:#06070B; padding:22px 28px; overflow:hidden; }
+.admin-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; }
+.admin-head h2 { font-size:24px; font-weight:800; letter-spacing:-.02em; }
+.admin-head .actions { display:flex; gap:8px; align-items:center; }
+.kpi-grid { display:grid; grid-template-columns:repeat(4, 1fr); gap:14px; margin-bottom:20px; }
+.kpi { background:#0C0E17; border:1px solid rgba(255,255,255,.08); border-radius:14px; padding:16px; position:relative; overflow:hidden; }
+.kpi .lbl { font-size:11px; color:#8E95A5; font-weight:600; letter-spacing:.06em; text-transform:uppercase; }
+.kpi .num { font-size:32px; font-weight:800; margin-top:6px; letter-spacing:-.02em; }
+.kpi .delta { font-size:12px; color:#00F5A0; margin-top:4px; font-weight:600; }
+.kpi .delta.down { color:#FF385C; }
+.kpi::after { content:""; position:absolute; right:-30px; top:-30px; width:100px; height:100px; border-radius:50%; background:radial-gradient(circle, rgba(255,94,58,.15), transparent 70%); }
+.data-tbl { width:100%; border-collapse:separate; border-spacing:0; }
+.data-tbl th { text-align:left; font-size:11px; color:#8E95A5; font-weight:700; letter-spacing:.05em; text-transform:uppercase; padding:12px 14px; background:#0A0D16; border-bottom:1px solid rgba(255,255,255,.06); }
+.data-tbl td { padding:12px 14px; font-size:13px; border-bottom:1px solid rgba(255,255,255,.04); }
+.data-tbl tr.on td { background:rgba(255,94,58,.06); }
+.avatar { width:32px; height:32px; border-radius:50%; background:linear-gradient(135deg,#FF5E3A,#FF385C); color:#000; font-weight:800; font-size:13px; display:inline-flex; align-items:center; justify-content:center; margin-right:10px; vertical-align:middle; }
+
+/* Chart atoms */
+.chart-card { background:#0C0E17; border:1px solid rgba(255,255,255,.08); border-radius:14px; padding:18px; }
+.chart-card .chart-title { font-size:14px; font-weight:700; margin-bottom:8px; }
+.bars { display:flex; align-items:flex-end; gap:10px; height:140px; padding-top:8px; }
+.bar { flex:1; background:linear-gradient(180deg,#FF5E3A,#FFAE00); border-radius:6px 6px 2px 2px; position:relative; min-height:8px; }
+.bar.alt { background:linear-gradient(180deg,#00F5A0,#00D2FF); }
+.line-chart { position:relative; height:140px; }
+.line-chart svg { width:100%; height:100%; overflow:visible; }
+.donut { width:120px; height:120px; }
+
+/* Kinetic type */
+.kin { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:24px; padding:80px; text-align:center; }
+.kin .huge { font-size:120px; font-weight:900; letter-spacing:-.045em; line-height:.95; }
+.kin .huge .grad { background:linear-gradient(135deg,#FF5E3A,#FFAE00,#FF385C); -webkit-background-clip:text; background-clip:text; color:transparent; }
+.kin .huge .mono { font-family:'JetBrains Mono',monospace; }
+.kin .row { display:flex; gap:18px; align-items:center; justify-content:center; flex-wrap:wrap; }
+.kin .pill { padding:14px 24px; border-radius:100px; font-size:20px; font-weight:700; letter-spacing:.02em; }
+.kin .pill.orange { background:rgba(255,94,58,.15); border:1px solid rgba(255,94,58,.5); color:#FF5E3A; }
+.kin .pill.mint { background:rgba(0,245,160,.1); border:1px solid rgba(0,245,160,.4); color:#00F5A0; }
+.kin .pill.pink { background:rgba(255,56,92,.1); border:1px solid rgba(255,56,92,.4); color:#FF385C; }
+.kin .pill.ghost { background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.15); color:#fff; }
+.kin .lead { font-size:20px; color:#8E95A5; max-width:1100px; font-weight:500; }
+
+/* Contact card */
+.contact-card { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:1000px; padding:56px 72px; background:rgba(12,14,23,.94); border:1px solid rgba(255,255,255,.1); border-radius:32px; box-shadow:0 40px 120px rgba(255,94,58,.15), 0 20px 60px rgba(0,0,0,.7); }
+.contact-card .by { text-align:center; font-size:16px; color:#8E95A5; letter-spacing:.3em; font-weight:600; text-transform:uppercase; margin-bottom:12px; }
+.contact-card .name { text-align:center; font-size:64px; font-weight:900; letter-spacing:-.03em; }
+.contact-card .handle { display:inline-block; padding:8px 20px; border-radius:100px; background:linear-gradient(135deg,#FF5E3A,#FFAE00); color:#06070B; font-weight:900; font-size:32px; letter-spacing:-.01em; margin-left:16px; vertical-align:middle; }
+.contact-card .roles { text-align:center; font-size:18px; color:#8E95A5; margin-top:8px; font-weight:500; font-style:italic; }
+.contact-card .divider { height:1px; background:linear-gradient(90deg,transparent, rgba(255,255,255,.15), transparent); margin:36px 0; }
+.contact-card .rows { display:flex; flex-direction:column; gap:16px; }
+.contact-card .row { display:flex; align-items:center; gap:20px; font-size:22px; }
+.contact-card .row .emj { width:36px; height:36px; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,.06); border-radius:10px; font-size:20px; }
+.contact-card .row .lbl { font-size:14px; color:#8E95A5; width:110px; letter-spacing:.05em; font-weight:600; text-transform:uppercase; }
+.contact-card .row .val { font-weight:700; color:#fff; font-family:'JetBrains Mono',monospace; font-size:18px; }
+.contact-card .row .val.strong { color:#FFAE00; }
+.contact-card .cta { text-align:center; margin-top:24px; font-size:16px; color:#00F5A0; font-weight:600; }
+.contact-card .foot { text-align:center; margin-top:8px; font-size:13px; color:#606778; font-style:italic; }
+
+/* Cursor */
+.cursor { position:absolute; width:24px; height:24px; pointer-events:none; z-index:100; left:50%; top:50%; transform:translate(-50%,-50%); }
+.cursor svg { filter:drop-shadow(0 2px 6px rgba(0,0,0,.6)); }
+.cursor .ripple { position:absolute; left:12px; top:12px; width:0; height:0; border-radius:50%; border:2px solid rgba(255,255,255,.6); transform:translate(-50%,-50%); opacity:0; }
+
+/* Toast */
+.toast { position:absolute; bottom:100px; left:50%; transform:translateX(-50%); padding:12px 20px; background:rgba(12,14,23,.95); border:1px solid rgba(0,245,160,.4); border-radius:100px; font-size:13px; font-weight:600; color:#00F5A0; display:flex; align-items:center; gap:8px; z-index:20; box-shadow:0 10px 30px rgba(0,245,160,.2); }
+.toast .dot { width:8px; height:8px; border-radius:50%; background:#00F5A0; }
+
+/* Feature badge grid */
+.badges { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:1600px; display:flex; flex-wrap:wrap; gap:16px; justify-content:center; padding:40px; }
+.chip { padding:14px 22px; border-radius:14px; background:rgba(20,23,36,.95); border:1px solid rgba(255,255,255,.1); font-size:16px; font-weight:700; color:#fff; display:flex; align-items:center; gap:10px; }
+.chip .dot { width:10px; height:10px; border-radius:50%; }
+.chip.hot { border-color:rgba(255,94,58,.5); color:#FF5E3A; background:rgba(255,94,58,.08); }
+.chip.mint { border-color:rgba(0,245,160,.4); color:#00F5A0; background:rgba(0,245,160,.06); }
+.chip.gold { border-color:rgba(255,174,0,.4); color:#FFAE00; background:rgba(255,174,0,.06); }
+.chip.pink { border-color:rgba(255,56,92,.4); color:#FF385C; background:rgba(255,56,92,.06); }
+</style>
+</head>
+<body>
+<div id="root" data-composition-id="main" data-start="0" data-duration="382" data-width="1920" data-height="1080">
+
+<audio id="bgm" class="clip" data-start="0" data-duration="382" data-track-index="10" src="bgm-loop.mp3" data-volume="1"></audio>
+
+<!-- ==================== SCENE 1 · HOOK (0-8s) ==================== -->
+<section id="s1" class="scene clip" data-start="0" data-duration="8" data-track-index="0">
+  <div class="stage-bg"></div>
+  <div class="glow orange" id="s1g1"></div>
+  <div class="glow gold" id="s1g2"></div>
+  <div class="grid-bg"></div>
+  <div class="kin">
+    <div class="lead" id="s1lead" style="opacity:0;">An AI-powered social platform, built end-to-end.</div>
+    <div class="huge"><span id="s1w1" style="opacity:0;">41 </span><span class="grad" id="s1w2" style="opacity:0;">screens.</span></div>
+    <div class="row">
+      <div class="pill orange" id="s1p1" style="opacity:0;">iOS</div>
+      <div class="pill mint" id="s1p2" style="opacity:0;">Android</div>
+      <div class="pill pink" id="s1p3" style="opacity:0;">Web Admin</div>
+      <div class="pill ghost" id="s1p4" style="opacity:0;">Supabase Backend</div>
+    </div>
+    <div class="lead" id="s1tag" style="opacity:0; color:#fff; font-weight:700; font-size:26px; margin-top:20px;">One codebase. Shipped everywhere.</div>
+  </div>
+</section>
+
+<!-- ==================== SCENE 2 · BRAND HERO (8-18s) ==================== -->
+<section id="s2" class="scene clip" data-start="8" data-duration="10" data-track-index="0">
+  <div class="stage-bg"></div>
+  <div class="glow orange"></div>
+  <div class="glow gold"></div>
+  <div class="kin">
+    <div id="s2logo" style="opacity:0; width:140px; height:140px; border-radius:36px; background:linear-gradient(135deg,#FF5E3A,#FFAE00,#FF385C); display:flex; align-items:center; justify-content:center; font-size:76px; font-weight:900; color:#06070B; box-shadow:0 40px 80px rgba(255,94,58,.4); margin-bottom:24px;">SP</div>
+    <div class="huge" style="font-size:96px;"><span class="grad" id="s2name" style="opacity:0;">SocialPilot AI Pro</span></div>
+    <div id="s2tag" class="lead" style="opacity:0; font-size:24px; margin-top:14px; color:#fff; font-weight:600;">Autonomous multi-platform growth engine</div>
+    <div class="row" style="margin-top:32px;">
+      <div class="pill orange" id="s2p1" style="opacity:0;">Powered by Gemini + Replicate</div>
+      <div class="pill mint" id="s2p2" style="opacity:0;">Realtime · RLS · Stripe-ready</div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== SCENE 3 · MOBILE AUTH (18-38s) ==================== -->
+<section id="s3" class="scene clip" data-start="18" data-duration="20" data-track-index="0">
+  <div class="stage-bg"></div>
+  <div class="glow pink" style="opacity:.2;"></div>
+  <div class="caption">
+    <div class="kicker">Secure Auth</div>
+    <div class="title">Sign up in seconds. Email or Google.</div>
+    <div class="sub">Supabase Auth · JWT · Biometric-ready</div>
+  </div>
+  <!-- 3 iPhones side-by-side showing the auth flow -->
+  <div class="device" style="left:38%; top:62%; transform:translate(-50%,-50%) scale(.66);">
+    <div class="iphone">
+      <div class="screen"><div class="island"></div><div class="statusbar"><span>9:41</span><span>●●● WiFi 🔋</span></div><div class="home-bar"></div>
+        <div class="ui">
+          <div class="app-header"><div class="h1">Welcome back</div><div class="sub">Sign in to continue</div></div>
+          <div style="padding:0 22px; display:flex; flex-direction:column; gap:12px;">
+            <div class="input filled">alex@creator.io</div>
+            <div class="input filled">••••••••••••</div>
+            <div class="btn primary" style="width:100%; margin-top:8px;">Sign In</div>
+            <div style="text-align:center; color:#606778; font-size:12px; margin-top:6px;">— OR —</div>
+            <div class="btn ghost" style="width:100%;">🇬 Sign in with Google</div>
+            <div style="text-align:center; margin-top:12px;"><span style="color:#FF5E3A; font-size:13px; font-weight:600;">Forgot password?</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="device" style="left:62%; top:62%; transform:translate(-50%,-50%) scale(.66);">
+    <div class="iphone">
+      <div class="screen"><div class="island"></div><div class="statusbar"><span>9:41</span><span>●●● WiFi 🔋</span></div><div class="home-bar"></div>
+        <div class="ui">
+          <div class="app-header"><div class="h1">Create account</div><div class="sub">Free plan · no credit card</div></div>
+          <div style="padding:0 22px; display:flex; flex-direction:column; gap:12px;">
+            <div class="input">Full name</div>
+            <div class="input filled">alex@creator.io</div>
+            <div class="input filled">••••••••••</div>
+            <div class="btn primary" style="width:100%; margin-top:8px;">Start Free Trial</div>
+            <div style="font-size:11px; color:#606778; margin-top:6px; text-align:center;">By signing up you agree to the Terms</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="device" id="s3d3" style="left:86%; top:62%; transform:translate(-50%,-50%) scale(.66); opacity:0;">
+    <div class="iphone">
+      <div class="screen"><div class="island"></div><div class="statusbar"><span>9:41</span><span>●●● WiFi 🔋</span></div><div class="home-bar"></div>
+        <div class="ui">
+          <div class="app-header"><div class="h1">Pick your niche</div><div class="sub">Step 1 of 4</div></div>
+          <div style="padding:0 22px; display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+            <div class="card" style="text-align:center; padding:24px 10px;"><div style="font-size:32px;">💼</div><div style="font-weight:700; margin-top:6px;">Business</div></div>
+            <div class="card accent" style="text-align:center; padding:24px 10px;"><div style="font-size:32px;">🎨</div><div style="font-weight:700; margin-top:6px;">Creator</div></div>
+            <div class="card" style="text-align:center; padding:24px 10px;"><div style="font-size:32px;">🛍️</div><div style="font-weight:700; margin-top:6px;">E-commerce</div></div>
+            <div class="card" style="text-align:center; padding:24px 10px;"><div style="font-size:32px;">🍔</div><div style="font-weight:700; margin-top:6px;">Local</div></div>
+          </div>
+          <div style="padding:0 22px; margin-top:16px;"><div class="btn primary" style="width:100%;">Next</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="callouts" style="top:auto; bottom:60px; left:120px; width:1000px; flex-direction:row; gap:24px;">
+    <div class="callout" id="s3c1"><div class="lbl">Supabase Auth</div><div class="txt">Email + password with JWT refresh</div></div>
+    <div class="callout" id="s3c2"><div class="lbl">OAuth</div><div class="txt">Google one-tap sign-in on iOS & Android</div></div>
+    <div class="callout" id="s3c3"><div class="lbl">Onboarding</div><div class="txt">4-step wizard personalises the AI tone</div></div>
+  </div>
+</section>
+
+<!-- ==================== SCENE 4 · MOBILE HOME (38-52s) ==================== -->
+<section id="s4" class="scene clip" data-start="38" data-duration="14" data-track-index="0">
+  <div class="stage-bg"></div>
+  <div class="glow orange"></div>
+  <div class="caption">
+    <div class="kicker">Home · Command Center</div>
+    <div class="title">Everything at a glance.</div>
+    <div class="sub">Live stats, scheduled posts, quick actions</div>
+  </div>
+  <div class="device" style="transform:translate(-50%,-50%) scale(.72);">
+    <div class="iphone">
+      <div class="screen"><div class="island"></div><div class="statusbar"><span>9:41</span><span>●●● WiFi 🔋</span></div><div class="home-bar"></div>
+        <div class="ui">
+          <div class="app-header">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div><div class="h1" id="s4hello" style="opacity:0;">Hi, Alex 👋</div><div class="sub">Sunday, September 30</div></div>
+              <div style="width:36px; height:36px; border-radius:50%; background:linear-gradient(135deg,#FF5E3A,#FFAE00);"></div>
+            </div>
+          </div>
+          <div style="padding:8px 22px 12px;">
+            <div class="card accent" id="s4hero" style="opacity:0; padding:16px;">
+              <div style="font-size:11px; color:#FFAE00; font-weight:700; letter-spacing:.1em;">CREATIVE CREDITS</div>
+              <div style="display:flex; align-items:baseline; gap:6px; margin-top:4px;">
+                <div style="font-size:36px; font-weight:900;" id="s4cred">247</div>
+                <div style="color:#8E95A5; font-size:13px;">/ 500 left</div>
+              </div>
+              <div style="height:6px; background:rgba(0,0,0,.4); border-radius:3px; margin-top:8px; overflow:hidden;">
+                <div id="s4bar" style="height:100%; width:0%; background:linear-gradient(90deg,#FF5E3A,#FFAE00);"></div>
+              </div>
+            </div>
+          </div>
+          <div class="stat-row" style="margin-bottom:12px;">
+            <div class="stat" id="s4s1" style="opacity:0;"><div class="k">Posts This Week</div><div class="v" style="color:#FF5E3A;">14</div><div class="d">↑ 3 vs last</div></div>
+            <div class="stat" id="s4s2" style="opacity:0;"><div class="k">Scheduled</div><div class="v">7</div><div class="d">Next: 4:30 PM</div></div>
+            <div class="stat" id="s4s3" style="opacity:0;"><div class="k">Total Reach</div><div class="v">42.8K</div><div class="d">↑ 18.2%</div></div>
+            <div class="stat pulse" id="s4s4" style="opacity:0;"><div class="k">Engagement</div><div class="v">6.4%</div><div class="d">↑ 0.8</div></div>
+          </div>
+          <div style="padding:0 22px 12px;" id="s4cta" class="opacity:0;">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+              <div style="font-weight:800; font-size:15px;">Recent Posts</div>
+              <div style="color:#FF5E3A; font-size:12px; font-weight:700;">See all →</div>
+            </div>
+            <div class="post"><div class="head"><div class="plat" style="color:#1DA1F2;">𝕏 Twitter</div><span class="badge green">Published</span></div><div class="body">"Ship features your users actually ask for..."</div><div class="foot"><span>2.3K views</span><span>184 likes</span></div></div>
+            <div class="post"><div class="head"><div class="plat" style="color:#E4405F;">📸 Instagram</div><span class="badge orange">Scheduled</span></div><div class="body">"Behind the scenes of our 30-day launch..."</div><div class="foot"><span>Tomorrow 9AM</span></div></div>
+          </div>
+          <div class="tabbar">
+            <div class="tab on"><div class="ico"></div><div>Home</div></div>
+            <div class="tab"><div class="ico"></div><div>Generate</div></div>
+            <div class="tab"><div class="ico"></div><div>Calendar</div></div>
+            <div class="tab"><div class="ico"></div><div>Analytics</div></div>
+            <div class="tab"><div class="ico"></div><div>Profile</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== SCENE 5 · MOBILE GENERATE (52-76s) · flagship ==================== -->
+<section id="s5" class="scene clip" data-start="52" data-duration="24" data-track-index="0">
+  <div class="stage-bg"></div>
+  <div class="glow orange" style="opacity:.4;"></div>
+  <div class="glow gold" style="opacity:.3;"></div>
+  <div class="caption">
+    <div class="kicker">Flagship · AI Studio</div>
+    <div class="title">One prompt → platform-native content for all of them.</div>
+    <div class="sub">Gemini 2.0 + Replicate image gen · tuned per-network</div>
+  </div>
+  <div class="device" style="left:36%; transform:translate(-50%,-50%) scale(.7);">
+    <div class="iphone">
+      <div class="screen"><div class="island"></div><div class="statusbar"><span>9:41</span><span>●●● WiFi 🔋</span></div><div class="home-bar"></div>
+        <div class="ui">
+          <div class="app-header"><div class="h1">Generate Content</div><div class="sub">Model: Gemini 2.0 Flash</div></div>
+          <div style="padding:0 22px; display:flex; flex-direction:column; gap:10px;">
+            <div style="font-size:11px; color:#8E95A5; font-weight:700; letter-spacing:.1em;">PLATFORMS</div>
+            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+              <div class="badge orange" style="padding:6px 10px; font-size:11px;">𝕏 Twitter</div>
+              <div class="badge orange" style="padding:6px 10px; font-size:11px;">📸 Instagram</div>
+              <div class="badge orange" style="padding:6px 10px; font-size:11px;">💼 LinkedIn</div>
+              <div class="badge" style="padding:6px 10px; font-size:11px; background:rgba(255,255,255,.05); color:#8E95A5;">TikTok</div>
+              <div class="badge" style="padding:6px 10px; font-size:11px; background:rgba(255,255,255,.05); color:#8E95A5;">Facebook</div>
+            </div>
+            <div style="font-size:11px; color:#8E95A5; font-weight:700; letter-spacing:.1em; margin-top:8px;">BRIEF</div>
+            <div class="input filled" style="min-height:80px; padding:14px; font-size:13px; line-height:1.5;"><span id="s5typed"></span><span id="s5caret" style="color:#FF5E3A;">|</span></div>
+            <div class="btn primary" id="s5gen" style="width:100%; margin-top:6px;">✨ Generate 3 Variations</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- Right phone shows output -->
+  <div class="device" id="s5out" style="left:66%; transform:translate(-50%,-50%) scale(.7); opacity:0;">
+    <div class="iphone">
+      <div class="screen"><div class="island"></div><div class="statusbar"><span>9:41</span><span>●●● WiFi 🔋</span></div><div class="home-bar"></div>
+        <div class="ui">
+          <div class="app-header"><div class="h1">3 variations ready</div><div class="sub">Cost: 12 credits · 1.8s</div></div>
+          <div style="padding:0 22px; display:flex; flex-direction:column; gap:10px;">
+            <div class="card accent" style="padding:12px;"><div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;"><span class="plat" style="color:#1DA1F2; font-weight:800;">𝕏 Twitter · 274 chars</span><span class="badge green">Best</span></div><div style="font-size:12px; line-height:1.5;">Ship the features your users actually ask for. Not the ones on your roadmap deck. 🚀 <span style="color:#FFAE00;">#product #buildinpublic</span></div></div>
+            <div class="card" style="padding:12px;"><div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;"><span class="plat" style="color:#E4405F; font-weight:800;">📸 Instagram · caption</span></div><div style="font-size:12px; line-height:1.5;">"Listen to your users." We rewrote the roadmap after 47 DMs. Result? <span style="color:#00F5A0;">3.2× engagement</span> in 30 days.</div></div>
+            <div class="card" style="padding:12px;"><div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;"><span class="plat" style="color:#0A66C2; font-weight:800;">💼 LinkedIn · hook</span></div><div style="font-size:12px; line-height:1.5;">The best product teams don't guess — they instrument. Here's our 5-step framework for user-driven roadmaps...</div></div>
+            <div style="display:flex; gap:8px; margin-top:6px;"><div class="btn primary" style="flex:1; font-size:13px; padding:10px;">Schedule</div><div class="btn ghost" style="flex:1; font-size:13px; padding:10px;">Save as Template</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="callouts right" style="top:auto; bottom:80px; width:280px;">
+    <div class="callout" id="s5c1" style="opacity:0;"><div class="lbl">Multi-format</div><div class="txt">Same brief → native copy for 5 networks</div></div>
+    <div class="callout" id="s5c2" style="opacity:0;"><div class="lbl">Tone engine</div><div class="txt">Persona-aware phrasing per brand</div></div>
+  </div>
+</section>
+
+<!-- ==================== SCENE 6 · POST DETAIL + CALENDAR (76-96s) ==================== -->
+<section id="s6" class="scene clip" data-start="76" data-duration="20" data-track-index="0">
+  <div class="stage-bg"></div>
+  <div class="glow gold" style="opacity:.3;"></div>
+  <div class="caption">
+    <div class="kicker">Schedule · Publish · Track</div>
+    <div class="title">Content calendar that plans itself.</div>
+    <div class="sub">Best-time suggestions · queue · one-tap publish</div>
+  </div>
+  <div class="device" style="left:26%; transform:translate(-50%,-50%) scale(.62);">
+    <div class="iphone">
+      <div class="screen"><div class="island"></div><div class="statusbar"><span>9:41</span><span>●●● WiFi 🔋</span></div><div class="home-bar"></div>
+        <div class="ui">
+          <div class="app-header"><div class="h1">Post preview</div><div class="sub">Scheduled · Today 4:30 PM</div></div>
+          <div style="padding:0 22px;">
+            <div class="card accent" style="padding:14px;">
+              <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+                <div style="width:36px; height:36px; border-radius:50%; background:linear-gradient(135deg,#FF5E3A,#FFAE00);"></div>
+                <div><div style="font-weight:700; font-size:13px;">@alexbuilds</div><div style="font-size:11px; color:#8E95A5;">just now</div></div>
+                <div class="badge orange" style="margin-left:auto;">𝕏</div>
+              </div>
+              <div style="font-size:13px; line-height:1.5;">Ship the features your users actually ask for. Not the ones on your roadmap deck. 🚀 <span style="color:#FFAE00;">#product #buildinpublic</span></div>
+              <div style="display:flex; gap:24px; margin-top:12px; color:#8E95A5; font-size:12px;"><span>💬 12</span><span>🔁 47</span><span>❤️ 184</span><span>📊 2.3K</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="device" style="left:70%; transform:translate(-50%,-50%) scale(.62);">
+    <div class="iphone">
+      <div class="screen"><div class="island"></div><div class="statusbar"><span>9:41</span><span>●●● WiFi 🔋</span></div><div class="home-bar"></div>
+        <div class="ui">
+          <div class="app-header"><div class="h1">Calendar</div><div class="sub">September 2026</div></div>
+          <div style="padding:0 22px;">
+            <div style="display:grid; grid-template-columns:repeat(7,1fr); gap:6px; font-size:10px; color:#606778; text-align:center; margin-bottom:6px;"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span></div>
+            <div style="display:grid; grid-template-columns:repeat(7,1fr); gap:6px; font-size:11px; text-align:center;">
+              <div style="padding:8px 0; color:#606778;">30</div>
+              <div class="cal-d">31</div><div class="cal-d">1</div><div class="cal-d hot">2</div><div class="cal-d">3</div><div class="cal-d">4</div><div class="cal-d hot">5</div>
+              <div class="cal-d">6</div><div class="cal-d hot">7</div><div class="cal-d">8</div><div class="cal-d">9</div><div class="cal-d hot">10</div><div class="cal-d">11</div><div class="cal-d">12</div>
+              <div class="cal-d">13</div><div class="cal-d hot">14</div><div class="cal-d">15</div><div class="cal-d today">16</div><div class="cal-d hot">17</div><div class="cal-d">18</div><div class="cal-d hot">19</div>
+              <div class="cal-d">20</div><div class="cal-d">21</div><div class="cal-d hot">22</div><div class="cal-d">23</div><div class="cal-d">24</div><div class="cal-d hot">25</div><div class="cal-d">26</div>
+              <div class="cal-d">27</div><div class="cal-d">28</div><div class="cal-d">29</div><div class="cal-d sel" id="s6sel">30</div><div class="cal-d">1</div><div class="cal-d">2</div><div class="cal-d">3</div>
+            </div>
+            <div id="s6day" style="margin-top:14px; opacity:0;">
+              <div style="font-size:11px; color:#FFAE00; font-weight:700; letter-spacing:.1em; margin-bottom:6px;">SUNDAY · 4 POSTS</div>
+              <div class="post"><div class="head"><div class="plat" style="color:#E4405F;">📸 Instagram</div><span style="font-size:11px; color:#8E95A5;">9:00 AM</span></div><div class="body">"Behind the scenes of our 30-day launch..."</div></div>
+              <div class="post" style="margin-top:8px;"><div class="head"><div class="plat" style="color:#0A66C2;">💼 LinkedIn</div><span style="font-size:11px; color:#8E95A5;">11:30 AM</span></div><div class="body">"The best product teams don't guess..."</div></div>
+              <div class="post" style="margin-top:8px;"><div class="head"><div class="plat" style="color:#1DA1F2;">𝕏 Twitter</div><span style="font-size:11px; color:#8E95A5;">4:30 PM</span></div><div class="body">"Ship the features your users ask for..."</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="callouts" style="top:auto; bottom:60px; left:120px; width:1600px; flex-direction:row; gap:20px;">
+    <div class="callout" id="s6c1" style="opacity:0;"><div class="lbl">Best-time engine</div><div class="txt">Learns from your audience peak hours</div></div>
+    <div class="callout" id="s6c2" style="opacity:0;"><div class="lbl">Queue</div><div class="txt">Auto-reschedule if a slot opens up</div></div>
+    <div class="callout" id="s6c3" style="opacity:0;"><div class="lbl">Cross-post</div><div class="txt">One draft → 5 platforms with rewrites</div></div>
+  </div>
+</section>
+
+<style>
+.cal-d { padding:8px 0; background:rgba(20,23,36,.7); border-radius:6px; }
+.cal-d.hot { box-shadow:inset 0 -4px 0 -1px #FF5E3A; }
+.cal-d.today { background:rgba(255,174,0,.15); color:#FFAE00; font-weight:800; }
+.cal-d.sel { background:linear-gradient(135deg,#FF5E3A,#FFAE00); color:#06070B; font-weight:900; }
+</style>
+
+<!-- ==================== SCENE 7 · MOBILE ANALYTICS (96-112s) ==================== -->
+<section id="s7" class="scene clip" data-start="96" data-duration="16" data-track-index="0">
+  <div class="stage-bg"></div>
+  <div class="glow orange"></div>
+  <div class="caption">
+    <div class="kicker">Analytics</div>
+    <div class="title">Numbers that actually move the needle.</div>
+    <div class="sub">Reach · engagement · best-time · per-platform drill-down</div>
+  </div>
+  <div class="device" style="transform:translate(-50%,-50%) scale(.72);">
+    <div class="iphone">
+      <div class="screen"><div class="island"></div><div class="statusbar"><span>9:41</span><span>●●● WiFi 🔋</span></div><div class="home-bar"></div>
+        <div class="ui">
+          <div class="app-header"><div class="h1">Analytics</div><div class="sub">Last 30 days</div></div>
+          <div class="stat-row">
+            <div class="stat" id="s7s1"><div class="k">Total Reach</div><div class="v" style="color:#FF5E3A;">428K</div><div class="d">↑ 22.4%</div></div>
+            <div class="stat" id="s7s2"><div class="k">Engagement</div><div class="v">6.4%</div><div class="d">↑ 0.8</div></div>
+          </div>
+          <div style="padding:12px 22px;">
+            <div class="chart-card" style="padding:14px;">
+              <div class="chart-title" style="font-size:12px;">Reach over time</div>
+              <div class="line-chart" style="height:100px;">
+                <svg viewBox="0 0 300 100" preserveAspectRatio="none">
+                  <defs><linearGradient id="s7grad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#FF5E3A" stop-opacity=".5"/><stop offset="100%" stop-color="#FF5E3A" stop-opacity="0"/></linearGradient></defs>
+                  <path id="s7area" d="" fill="url(#s7grad)"/>
+                  <path id="s7line" d="" fill="none" stroke="#FF5E3A" stroke-width="2"/>
+                </svg>
+              </div>
+            </div>
+          </div>
+          <div style="padding:0 22px;">
+            <div class="chart-card" style="padding:14px;">
+              <div class="chart-title" style="font-size:12px;">Platform share</div>
+              <div style="display:flex; gap:8px; margin-top:8px;">
+                <div style="flex:1; display:flex; flex-direction:column; gap:6px;">
+                  <div><div style="display:flex; justify-content:space-between; font-size:10px;"><span>𝕏 Twitter</span><span>38%</span></div><div style="height:5px; background:rgba(255,255,255,.06); border-radius:3px; margin-top:3px; overflow:hidden;"><div class="pf-bar" style="width:0%; background:#1DA1F2; height:100%; border-radius:3px;" data-w="38%"></div></div></div>
+                  <div><div style="display:flex; justify-content:space-between; font-size:10px;"><span>📸 Instagram</span><span>31%</span></div><div style="height:5px; background:rgba(255,255,255,.06); border-radius:3px; margin-top:3px; overflow:hidden;"><div class="pf-bar" style="width:0%; background:#E4405F; height:100%; border-radius:3px;" data-w="31%"></div></div></div>
+                  <div><div style="display:flex; justify-content:space-between; font-size:10px;"><span>💼 LinkedIn</span><span>19%</span></div><div style="height:5px; background:rgba(255,255,255,.06); border-radius:3px; margin-top:3px; overflow:hidden;"><div class="pf-bar" style="width:0%; background:#0A66C2; height:100%; border-radius:3px;" data-w="19%"></div></div></div>
+                  <div><div style="display:flex; justify-content:space-between; font-size:10px;"><span>🎵 TikTok</span><span>12%</span></div><div style="height:5px; background:rgba(255,255,255,.06); border-radius:3px; margin-top:3px; overflow:hidden;"><div class="pf-bar" style="width:0%; background:#00F5A0; height:100%; border-radius:3px;" data-w="12%"></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="tabbar"><div class="tab"><div class="ico"></div><div>Home</div></div><div class="tab"><div class="ico"></div><div>Generate</div></div><div class="tab"><div class="ico"></div><div>Calendar</div></div><div class="tab on"><div class="ico"></div><div>Analytics</div></div><div class="tab"><div class="ico"></div><div>Profile</div></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="callouts right" style="top:auto; bottom:80px; width:320px;">
+    <div class="callout" id="s7c1"><div class="lbl">Realtime</div><div class="txt">Supabase subscription updates every post event</div></div>
+    <div class="callout" id="s7c2"><div class="lbl">CSV export</div><div class="txt">Full-funnel data, no rate limit</div></div>
+  </div>
+</section>
+
+<!-- ==================== SCENE 8 · MOBILE SETTINGS SWEEP (112-132s) ==================== -->
+<section id="s8" class="scene clip" data-start="112" data-duration="20" data-track-index="0">
+  <div class="stage-bg"></div>
+  <div class="glow gold" style="opacity:.25;"></div>
+  <div class="caption">
+    <div class="kicker">Profile · Settings · Security</div>
+    <div class="title">Everything the user can touch, tuned.</div>
+    <div class="sub">Theme · notifications · password · sessions</div>
+  </div>
+  <div class="device" style="left:20%; transform:translate(-50%,-50%) scale(.56);">
+    <div class="iphone"><div class="screen"><div class="island"></div><div class="statusbar"><span>9:41</span><span>●●● WiFi 🔋</span></div><div class="home-bar"></div>
+      <div class="ui"><div class="app-header"><div class="h1">Alex Rivera</div><div class="sub">Pro · 247 credits</div></div>
+        <div style="padding:0 22px; display:flex; flex-direction:column; gap:8px;">
+          <div class="card"><div style="display:flex; align-items:center; gap:12px;"><div style="width:56px; height:56px; border-radius:50%; background:linear-gradient(135deg,#FF5E3A,#FFAE00);"></div><div><div style="font-weight:800;">alex@creator.io</div><div style="font-size:11px; color:#8E95A5;">Joined March 2026</div></div></div></div>
+          <div class="card"><div style="display:flex; justify-content:space-between;"><span style="color:#8E95A5; font-size:12px;">Tier</span><span class="badge orange">PRO</span></div></div>
+          <div class="card"><div style="display:flex; justify-content:space-between;"><span>Connected accounts</span><span style="color:#FF5E3A;">→</span></div></div>
+          <div class="card"><div style="display:flex; justify-content:space-between;"><span>Team</span><span style="color:#FF5E3A;">→</span></div></div>
+          <div class="card"><div style="display:flex; justify-content:space-between;"><span>Security</span><span style="color:#FF5E3A;">→</span></div></div>
+          <div class="card"><div style="display:flex; justify-content:space-between;"><span>Notifications</span><span style="color:#FF5E3A;">→</span></div></div>
+        </div>
+      </div>
+    </div></div>
+  </div>
+  <div class="device" id="s8d2" style="left:47%; transform:translate(-50%,-50%) scale(.56); opacity:0;">
+    <div class="iphone"><div class="screen"><div class="island"></div><div class="statusbar"><span>9:41</span><span>●●● WiFi 🔋</span></div><div class="home-bar"></div>
+      <div class="ui"><div class="app-header"><div class="h1">Settings</div><div class="sub">Preferences</div></div>
+        <div style="padding:0 22px; display:flex; flex-direction:column; gap:10px;">
+          <div style="font-size:11px; color:#FFAE00; font-weight:700; letter-spacing:.1em;">APPEARANCE</div>
+          <div style="display:grid; grid-template-columns:repeat(5,1fr); gap:6px;">
+            <div class="swatch sel" style="background:linear-gradient(135deg,#FF5E3A,#FFAE00);"></div>
+            <div class="swatch" style="background:linear-gradient(135deg,#00F5A0,#00D2FF);"></div>
+            <div class="swatch" style="background:linear-gradient(135deg,#FF2A85,#8B5CF6);"></div>
+            <div class="swatch" style="background:linear-gradient(135deg,#38BDF8,#6366F1);"></div>
+            <div class="swatch" style="background:linear-gradient(135deg,#F4F4F5,#A1A1AA);"></div>
+          </div>
+          <div class="card"><div style="display:flex; justify-content:space-between; align-items:center;"><span>Dark mode</span><div class="toggle on"><div class="knob"></div></div></div></div>
+          <div class="card"><div style="display:flex; justify-content:space-between; align-items:center;"><span>Haptic feedback</span><div class="toggle on"><div class="knob"></div></div></div></div>
+          <div class="card"><div style="display:flex; justify-content:space-between; align-items:center;"><span>Reduce motion</span><div class="toggle"><div class="knob"></div></div></div></div>
+          <div style="font-size:11px; color:#FFAE00; font-weight:700; letter-spacing:.1em; margin-top:8px;">CONTENT DEFAULTS</div>
+          <div class="card"><div style="display:flex; justify-content:space-between;"><span>Default AI tone</span><span style="color:#FF5E3A;">Bold · Confident</span></div></div>
+          <div class="card"><div style="display:flex; justify-content:space-between;"><span>Auto-hashtag</span><span style="color:#00F5A0;">On</span></div></div>
+        </div>
+      </div>
+    </div></div>
+  </div>
+  <div class="device" id="s8d3" style="left:73%; transform:translate(-50%,-50%) scale(.56); opacity:0;">
+    <div class="iphone"><div class="screen"><div class="island"></div><div class="statusbar"><span>9:41</span><span>●●● WiFi 🔋</span></div><div class="home-bar"></div>
+      <div class="ui"><div class="app-header"><div class="h1">Security</div><div class="sub">Keep your account safe</div></div>
+        <div style="padding:0 22px; display:flex; flex-direction:column; gap:8px;">
+          <div class="card"><div style="display:flex; justify-content:space-between;"><span>Two-factor auth</span><span class="badge green">Enabled</span></div></div>
+          <div class="card"><div style="display:flex; justify-content:space-between;"><span>Change password</span><span style="color:#FF5E3A;">→</span></div></div>
+          <div class="card"><div style="display:flex; justify-content:space-between;"><span>Biometric login</span><div class="toggle on"><div class="knob"></div></div></div></div>
+          <div style="font-size:11px; color:#FFAE00; font-weight:700; letter-spacing:.1em; margin-top:8px;">ACTIVE SESSIONS</div>
+          <div class="card"><div style="font-size:12px; margin-bottom:4px;">📱 iPhone 15 Pro · San Francisco</div><div style="font-size:10px; color:#00F5A0;">This device · now</div></div>
+          <div class="card"><div style="font-size:12px; margin-bottom:4px;">💻 MacBook Pro · Austin</div><div style="font-size:10px; color:#8E95A5;">2 days ago · <span style="color:#FF385C; font-weight:700;">Revoke</span></div></div>
+        </div>
+      </div>
+    </div></div>
+  </div>
+</section>
+
+<style>
+.swatch { aspect-ratio:1; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,.4); border:2px solid transparent; }
+.swatch.sel { border-color:#fff; box-shadow:0 0 0 3px rgba(255,94,58,.4), 0 4px 12px rgba(0,0,0,.4); }
+.toggle { width:42px; height:24px; background:rgba(255,255,255,.1); border-radius:100px; position:relative; padding:2px; }
+.toggle .knob { width:20px; height:20px; background:#fff; border-radius:50%; transition:transform .2s; }
+.toggle.on { background:linear-gradient(90deg,#FF5E3A,#FFAE00); }
+.toggle.on .knob { transform:translateX(18px); }
+</style>
+
+<!-- ==================== SCENE 9 · CONNECTED ACCOUNTS (132-146s) ==================== -->
+<section id="s9" class="scene clip" data-start="132" data-duration="14" data-track-index="0">
+  <div class="stage-bg"></div>
+  <div class="glow orange"></div>
+  <div class="caption">
+    <div class="kicker">Connected Accounts</div>
+    <div class="title">Every network, one OAuth.</div>
+    <div class="sub">Twitter · Instagram · LinkedIn · TikTok · Facebook</div>
+  </div>
+  <div class="device" style="transform:translate(-50%,-50%) scale(.72);">
+    <div class="iphone"><div class="screen"><div class="island"></div><div class="statusbar"><span>9:41</span><span>●●● WiFi 🔋</span></div><div class="home-bar"></div>
+      <div class="ui">
+        <div class="app-header"><div class="h1">Connected Accounts</div><div class="sub">5 of 5 networks linked</div></div>
+        <div style="padding:0 22px; display:flex; flex-direction:column; gap:10px;">
+          <div class="card conn"><div style="display:flex; align-items:center; gap:12px;"><div style="width:44px; height:44px; border-radius:12px; background:#1DA1F2; display:flex; align-items:center; justify-content:center; font-size:22px; color:#fff;">𝕏</div><div style="flex:1;"><div style="font-weight:700; font-size:14px;">Twitter / X</div><div style="font-size:11px; color:#00F5A0;">@alexbuilds · connected</div></div><span class="badge green">Active</span></div></div>
+          <div class="card conn"><div style="display:flex; align-items:center; gap:12px;"><div style="width:44px; height:44px; border-radius:12px; background:linear-gradient(135deg,#F58529,#DD2A7B,#8134AF); display:flex; align-items:center; justify-content:center; font-size:22px;">📸</div><div style="flex:1;"><div style="font-weight:700; font-size:14px;">Instagram</div><div style="font-size:11px; color:#00F5A0;">@alexbuilds · Business</div></div><span class="badge green">Active</span></div></div>
+          <div class="card conn"><div style="display:flex; align-items:center; gap:12px;"><div style="width:44px; height:44px; border-radius:12px; background:#0A66C2; display:flex; align-items:center; justify-content:center; font-size:20px; color:#fff; font-weight:900;">in</div><div style="flex:1;"><div style="font-weight:700; font-size:14px;">LinkedIn</div><div style="font-size:11px; color:#00F5A0;">Alex Rivera · Personal</div></div><span class="badge green">Active</span></div></div>
+          <div class="card conn"><div style="display:flex; align-items:center; gap:12px;"><div style="width:44px; height:44px; border-radius:12px; background:#000; border:1px solid #25F4EE; display:flex; align-items:center; justify-content:center; font-size:22px; color:#FE2C55;">🎵</div><div style="flex:1;"><div style="font-weight:700; font-size:14px;">TikTok</div><div style="font-size:11px; color:#00F5A0;">@alexbuilds</div></div><span class="badge green">Active</span></div></div>
+          <div class="card conn"><div style="display:flex; align-items:center; gap:12px;"><div style="width:44px; height:44px; border-radius:12px; background:#1877F2; display:flex; align-items:center; justify-content:center; font-size:22px; color:#fff; font-weight:900;">f</div><div style="flex:1;"><div style="font-weight:700; font-size:14px;">Facebook</div><div style="font-size:11px; color:#00F5A0;">Alex's Page</div></div><span class="badge green">Active</span></div></div>
+          <div class="btn ghost" style="width:100%; margin-top:6px;">+ Connect Threads</div>
+        </div>
+      </div>
+    </div></div>
+  </div>
+  <div class="callouts right">
+    <div class="callout" id="s9c1"><div class="lbl">OAuth</div><div class="txt">Refresh tokens stored encrypted in Supabase Vault</div></div>
+    <div class="callout" id="s9c2"><div class="lbl">One-tap disconnect</div><div class="txt">Revoke access without losing history</div></div>
+  </div>
+</section>
+
+<!-- ==================== SCENE 10 · NOTES (146-160s) ==================== -->
+<section id="s10" class="scene clip" data-start="146" data-duration="14" data-track-index="0">
+  <div class="stage-bg"></div>
+  <div class="glow gold" style="opacity:.3;"></div>
+  <div class="caption">
+    <div class="kicker">Notes · Idea capture</div>
+    <div class="title">Jot an idea. The AI will finish it.</div>
+    <div class="sub">Rough note → polished post in one tap</div>
+  </div>
+  <div class="device" style="left:36%; transform:translate(-50%,-50%) scale(.68);">
+    <div class="iphone"><div class="screen"><div class="island"></div><div class="statusbar"><span>9:41</span><span>●●● WiFi 🔋</span></div><div class="home-bar"></div>
+      <div class="ui">
+        <div class="app-header"><div class="h1">Notes</div><div class="sub">12 ideas captured</div></div>
+        <div style="padding:0 22px; display:flex; flex-direction:column; gap:8px;">
+          <div class="note-card"><div style="display:flex; justify-content:space-between;"><span class="badge orange">Hook idea</span><span style="font-size:10px; color:#606778;">2h ago</span></div><div style="font-size:12px; margin-top:6px; line-height:1.5;">"Ship the features your users ask for, not the ones on the roadmap." → expand for Twitter thread.</div></div>
+          <div class="note-card"><div style="display:flex; justify-content:space-between;"><span class="badge mint">Story</span><span style="font-size:10px; color:#606778;">1d ago</span></div><div style="font-size:12px; margin-top:6px; line-height:1.5;">Behind the scenes of the 30-day launch. Numbers, mistakes, wins.</div></div>
+          <div class="note-card"><div style="display:flex; justify-content:space-between;"><span class="badge pink">Quote</span><span style="font-size:10px; color:#606778;">2d ago</span></div><div style="font-size:12px; margin-top:6px; line-height:1.5;">"The best product teams don't guess — they instrument."</div></div>
+          <div class="note-card"><div style="display:flex; justify-content:space-between;"><span class="badge orange">CTA</span><span style="font-size:10px; color:#606778;">3d ago</span></div><div style="font-size:12px; margin-top:6px; line-height:1.5;">Free template drop → link in bio.</div></div>
+        </div>
+      </div>
+    </div></div>
+  </div>
+  <div class="device" id="s10d2" style="left:66%; transform:translate(-50%,-50%) scale(.68); opacity:0;">
+    <div class="iphone"><div class="screen"><div class="island"></div><div class="statusbar"><span>9:41</span><span>●●● WiFi 🔋</span></div><div class="home-bar"></div>
+      <div class="ui">
+        <div class="app-header"><div class="h1">Rewrite with AI</div><div class="sub">Tone: Bold · Twitter</div></div>
+        <div style="padding:0 22px; display:flex; flex-direction:column; gap:10px;">
+          <div style="font-size:11px; color:#606778;">ORIGINAL</div>
+          <div class="card" style="font-size:12px; line-height:1.5; color:#8E95A5;">ship the features your users ask for, not the ones on the roadmap</div>
+          <div style="text-align:center; color:#FFAE00; font-size:20px; margin-top:-6px;">↓</div>
+          <div style="font-size:11px; color:#FFAE00; font-weight:700;">AI VARIATION</div>
+          <div class="card accent" style="font-size:12px; line-height:1.5;">Ship what they <b>ask</b> for. Not what your <b>deck</b> says.<br/><br/>Users don't read your roadmap. They live with your product. 🚀<br/><br/><span style="color:#FFAE00;">#product #buildinpublic</span></div>
+          <div style="display:flex; gap:8px;"><div class="btn primary" style="flex:1; font-size:12px; padding:10px;">Use → Schedule</div><div class="btn ghost" style="flex:1; font-size:12px; padding:10px;">Retry</div></div>
+        </div>
+      </div>
+    </div></div>
+  </div>
+</section>
+
+<style>
+.note-card { background:rgba(20,23,36,.85); border:1px solid rgba(255,255,255,.06); border-radius:12px; padding:12px; }
+</style>
+
+<!-- ==================== SCENE 11 · HISTORY + STUDIO MENU (160-176s) ==================== -->
+<section id="s11" class="scene clip" data-start="160" data-duration="16" data-track-index="0">
+  <div class="stage-bg"></div>
+  <div class="glow orange" style="opacity:.3;"></div>
+  <div class="caption">
+    <div class="kicker">History + Studio Menu</div>
+    <div class="title">Every post ever made, every tool one tap away.</div>
+    <div class="sub">Full archive · templates · bulk actions</div>
+  </div>
+  <div class="device" style="left:26%; transform:translate(-50%,-50%) scale(.62);">
+    <div class="iphone"><div class="screen"><div class="island"></div><div class="statusbar"><span>9:41</span><span>●●● WiFi 🔋</span></div><div class="home-bar"></div>
+      <div class="ui">
+        <div class="app-header"><div class="h1">History</div><div class="sub">All 340 generations</div></div>
+        <div style="padding:0 22px; display:flex; flex-direction:column; gap:6px;">
+          <div class="input" style="font-size:12px; margin-bottom:6px;">🔍 Search posts, prompts, hashtags…</div>
+          <div class="hist-row"><span class="badge orange" style="padding:4px 8px;">TW</span><div style="flex:1;"><div style="font-size:12px;">Ship the features...</div><div style="font-size:10px; color:#606778;">Sep 28 · 2.3K views</div></div></div>
+          <div class="hist-row"><span class="badge pink" style="padding:4px 8px;">IG</span><div style="flex:1;"><div style="font-size:12px;">Behind the scenes of...</div><div style="font-size:10px; color:#606778;">Sep 27 · 8.4K likes</div></div></div>
+          <div class="hist-row"><span class="badge green" style="padding:4px 8px;">LI</span><div style="flex:1;"><div style="font-size:12px;">The best product teams...</div><div style="font-size:10px; color:#606778;">Sep 25 · 1.2K reactions</div></div></div>
+          <div class="hist-row"><span class="badge orange" style="padding:4px 8px;">TW</span><div style="flex:1;"><div style="font-size:12px;">Nobody reads your roadmap...</div><div style="font-size:10px; color:#606778;">Sep 22 · 4.8K views</div></div></div>
+          <div class="hist-row"><span class="badge pink" style="padding:4px 8px;">IG</span><div style="flex:1;"><div style="font-size:12px;">Carousel: 5 growth loops...</div><div style="font-size:10px; color:#606778;">Sep 20 · 12K saves</div></div></div>
+          <div class="hist-row"><span class="badge mint" style="padding:4px 8px;">TT</span><div style="flex:1;"><div style="font-size:12px;">Script: 30s hook + reveal...</div><div style="font-size:10px; color:#606778;">Sep 18 · 42K plays</div></div></div>
+        </div>
+      </div>
+    </div></div>
+  </div>
+  <div class="device" id="s11d2" style="left:70%; transform:translate(-50%,-50%) scale(.62); opacity:0;">
+    <div class="iphone"><div class="screen"><div class="island"></div><div class="statusbar"><span>9:41</span><span>●●● WiFi 🔋</span></div><div class="home-bar"></div>
+      <div class="ui">
+        <div class="app-header"><div class="h1">Studio Menu</div><div class="sub">All creation tools</div></div>
+        <div style="padding:0 22px; display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+          <div class="studio-tile" style="background:linear-gradient(135deg,#FF5E3A22,#FFAE0022);"><div style="font-size:28px;">✨</div><div style="font-weight:700; font-size:13px; margin-top:4px;">AI Generate</div></div>
+          <div class="studio-tile"><div style="font-size:28px;">🎨</div><div style="font-weight:700; font-size:13px; margin-top:4px;">Image Studio</div></div>
+          <div class="studio-tile"><div style="font-size:28px;">🎬</div><div style="font-weight:700; font-size:13px; margin-top:4px;">Video Ideas</div></div>
+          <div class="studio-tile"><div style="font-size:28px;">📊</div><div style="font-weight:700; font-size:13px; margin-top:4px;">Analytics</div></div>
+          <div class="studio-tile"><div style="font-size:28px;">🗓️</div><div style="font-weight:700; font-size:13px; margin-top:4px;">Calendar</div></div>
+          <div class="studio-tile"><div style="font-size:28px;">📝</div><div style="font-weight:700; font-size:13px; margin-top:4px;">Notes</div></div>
+          <div class="studio-tile"><div style="font-size:28px;">👥</div><div style="font-weight:700; font-size:13px; margin-top:4px;">Team</div></div>
+          <div class="studio-tile"><div style="font-size:28px;">🔗</div><div style="font-weight:700; font-size:13px; margin-top:4px;">Connected</div></div>
+          <div class="studio-tile"><div style="font-size:28px;">⚡</div><div style="font-weight:700; font-size:13px; margin-top:4px;">Templates</div></div>
+          <div class="studio-tile"><div style="font-size:28px;">🔒</div><div style="font-weight:700; font-size:13px; margin-top:4px;">Security</div></div>
+        </div>
+      </div>
+    </div></div>
+  </div>
+</section>
+
+<style>
+.hist-row { display:flex; align-items:center; gap:10px; padding:8px 10px; background:rgba(20,23,36,.6); border-radius:10px; }
+.studio-tile { padding:16px 12px; background:rgba(20,23,36,.85); border:1px solid rgba(255,255,255,.08); border-radius:14px; text-align:center; }
+</style>
+
+<!-- ==================== SCENE 12 · TEAM (176-190s) · Android ==================== -->
+<section id="s12" class="scene clip" data-start="176" data-duration="14" data-track-index="0">
+  <div class="stage-bg"></div>
+  <div class="glow" style="background:#00F5A0; opacity:.28; top:-300px; left:-200px;"></div>
+  <div class="caption">
+    <div class="kicker">Team · Roles & Permissions</div>
+    <div class="title">Collaborate without stepping on each other.</div>
+    <div class="sub">Invite · roles · approval workflow</div>
+  </div>
+  <div class="device" style="transform:translate(-50%,-50%) scale(.68);">
+    <div class="android"><div class="screen"><div class="punch"></div><div class="statusbar"><span>9:41</span><span>📶 🔋</span></div>
+      <div class="ui">
+        <div class="app-header" style="padding-top:60px;"><div class="h1">Team · 6 members</div><div class="sub">Alex's Growth Studio</div></div>
+        <div style="padding:0 22px; display:flex; flex-direction:column; gap:8px;">
+          <div class="team-row"><div class="avatar">SR</div><div style="flex:1;"><div style="font-weight:700; font-size:13px;">Sara Kim</div><div style="font-size:10px; color:#8E95A5;">sara@studio.io</div></div><span class="badge orange">Owner</span></div>
+          <div class="team-row"><div class="avatar" style="background:linear-gradient(135deg,#00F5A0,#00D2FF);">MJ</div><div style="flex:1;"><div style="font-weight:700; font-size:13px;">Marcus Johnson</div><div style="font-size:10px; color:#8E95A5;">Content lead</div></div><span class="badge green">Admin</span></div>
+          <div class="team-row"><div class="avatar" style="background:linear-gradient(135deg,#FF385C,#8B5CF6);">DP</div><div style="flex:1;"><div style="font-weight:700; font-size:13px;">Dev Patel</div><div style="font-size:10px; color:#8E95A5;">Copywriter</div></div><span class="badge">Editor</span></div>
+          <div class="team-row"><div class="avatar" style="background:linear-gradient(135deg,#38BDF8,#6366F1);">LF</div><div style="flex:1;"><div style="font-weight:700; font-size:13px;">Luna Feng</div><div style="font-size:10px; color:#8E95A5;">Designer</div></div><span class="badge">Editor</span></div>
+          <div class="team-row"><div class="avatar" style="background:linear-gradient(135deg,#F4F4F5,#A1A1AA); color:#000;">RT</div><div style="flex:1;"><div style="font-weight:700; font-size:13px;">Rio Tanaka</div><div style="font-size:10px; color:#8E95A5;">Analytics</div></div><span class="badge">Viewer</span></div>
+          <div class="btn primary" style="width:100%; margin-top:12px;">+ Invite teammate</div>
+        </div>
+      </div>
+      <div class="navbar"><span class="back"></span><span class="home"></span><span class="recents"></span></div>
+    </div></div>
+  </div>
+  <div class="callouts right">
+    <div class="callout" id="s12c1"><div class="lbl">4 roles</div><div class="txt">Owner · Admin · Editor · Viewer with granular scopes</div></div>
+    <div class="callout" id="s12c2"><div class="lbl">Approval</div><div class="txt">Editor drafts → Admin approves → auto-publish</div></div>
+  </div>
+</section>
+
+<style>
+.team-row { display:flex; align-items:center; gap:10px; padding:10px 12px; background:rgba(20,23,36,.8); border-radius:12px; border:1px solid rgba(255,255,255,.06); }
+</style>
+
+<!-- ==================== SCENE 13 · PAYWALL (190-204s) · Android ==================== -->
+<section id="s13" class="scene clip" data-start="190" data-duration="14" data-track-index="0">
+  <div class="stage-bg"></div>
+  <div class="glow orange"></div>
+  <div class="glow gold" style="top:30%; left:60%;"></div>
+  <div class="caption">
+    <div class="kicker">Subscription · Paywall</div>
+    <div class="title">Free to start, Pro to scale.</div>
+    <div class="sub">Stripe-ready billing · annual saves 20%</div>
+  </div>
+  <div class="device" style="transform:translate(-50%,-50%) scale(.68);">
+    <div class="android"><div class="screen"><div class="punch"></div><div class="statusbar"><span>9:41</span><span>📶 🔋</span></div>
+      <div class="ui">
+        <div class="app-header" style="padding-top:60px; text-align:center;"><div class="h1">Unlock the pilot</div><div class="sub">Pick a plan · cancel anytime</div></div>
+        <div style="padding:0 22px; display:flex; flex-direction:column; gap:10px;">
+          <div class="tier"><div style="display:flex; justify-content:space-between; align-items:baseline;"><span style="font-weight:800; font-size:14px;">Free</span><span style="font-weight:900; font-size:18px;">$0</span></div><div class="tier-feat">100 credits / month · 2 platforms</div></div>
+          <div class="tier"><div style="display:flex; justify-content:space-between; align-items:baseline;"><span style="font-weight:800; font-size:14px;">Starter</span><span style="font-weight:900; font-size:18px;">$19<span style="font-size:11px; color:#8E95A5;">/mo</span></span></div><div class="tier-feat">500 credits · 3 platforms · Calendar</div></div>
+          <div class="tier hot"><div style="display:flex; justify-content:space-between; align-items:baseline;"><span style="font-weight:800; font-size:14px; color:#FFAE00;">Pro · Most picked</span><span style="font-weight:900; font-size:20px; color:#FFAE00;">$49<span style="font-size:11px; color:#8E95A5;">/mo</span></span></div><div class="tier-feat">2,500 credits · All 5 platforms · Team (3 seats) · AI image gen</div></div>
+          <div class="tier"><div style="display:flex; justify-content:space-between; align-items:baseline;"><span style="font-weight:800; font-size:14px;">Agency</span><span style="font-weight:900; font-size:18px;">$149<span style="font-size:11px; color:#8E95A5;">/mo</span></span></div><div class="tier-feat">10K credits · Unlimited seats · White-label · API access</div></div>
+          <div class="btn primary" style="width:100%; margin-top:8px; padding:14px;">Upgrade to Pro</div>
+          <div style="text-align:center; font-size:10px; color:#606778; margin-top:4px;">Secure checkout powered by Stripe · PCI-DSS</div>
+        </div>
+      </div>
+      <div class="navbar"><span class="back"></span><span class="home"></span><span class="recents"></span></div>
+    </div></div>
+  </div>
+</section>
+
+<style>
+.tier { padding:14px; background:rgba(20,23,36,.85); border:1px solid rgba(255,255,255,.08); border-radius:14px; }
+.tier.hot { background:linear-gradient(135deg, rgba(255,94,58,.15), rgba(255,174,0,.1)); border-color:#FFAE00; box-shadow:0 0 40px rgba(255,94,58,.25); }
+.tier-feat { font-size:11px; color:#8E95A5; margin-top:4px; }
+</style>
+
+<!-- ==================== SCENE 14 · NOTIFICATIONS + TEST CONNECTION (204-216s) ==================== -->
+<section id="s14" class="scene clip" data-start="204" data-duration="12" data-track-index="0">
+  <div class="stage-bg"></div>
+  <div class="glow pink" style="opacity:.25;"></div>
+  <div class="caption">
+    <div class="kicker">Notifications · Diagnostics</div>
+    <div class="title">Push alerts + a one-tap health check.</div>
+    <div class="sub">Realtime subscriptions · Supabase round-trip test</div>
+  </div>
+  <div class="device" style="left:32%; transform:translate(-50%,-50%) scale(.62);">
+    <div class="iphone"><div class="screen"><div class="island"></div><div class="statusbar"><span>9:41</span><span>●●● WiFi 🔋</span></div><div class="home-bar"></div>
+      <div class="ui">
+        <div class="app-header"><div class="h1">Notifications</div><div class="sub">4 unread</div></div>
+        <div style="padding:0 22px; display:flex; flex-direction:column; gap:8px;">
+          <div class="notif unread"><div style="width:8px; height:8px; background:#FF5E3A; border-radius:50%; margin-top:6px;"></div><div style="flex:1;"><div style="font-weight:700; font-size:12px;">Post scheduled successfully</div><div style="font-size:11px; color:#8E95A5;">Twitter · Today 4:30 PM</div></div></div>
+          <div class="notif unread"><div style="width:8px; height:8px; background:#00F5A0; border-radius:50%; margin-top:6px;"></div><div style="flex:1;"><div style="font-weight:700; font-size:12px;">🎉 Your post hit 2K views</div><div style="font-size:11px; color:#8E95A5;">Instagram · 3h ago</div></div></div>
+          <div class="notif unread"><div style="width:8px; height:8px; background:#FFAE00; border-radius:50%; margin-top:6px;"></div><div style="flex:1;"><div style="font-weight:700; font-size:12px;">Sara commented on a draft</div><div style="font-size:11px; color:#8E95A5;">Team · 5h ago</div></div></div>
+          <div class="notif unread"><div style="width:8px; height:8px; background:#FF385C; border-radius:50%; margin-top:6px;"></div><div style="flex:1;"><div style="font-weight:700; font-size:12px;">Low credits · 42 remaining</div><div style="font-size:11px; color:#8E95A5;">Account · yesterday</div></div></div>
+          <div class="notif"><div style="width:8px; height:8px; background:#606778; border-radius:50%; margin-top:6px;"></div><div style="flex:1;"><div style="font-weight:700; font-size:12px; color:#8E95A5;">Welcome to SocialPilot</div><div style="font-size:11px; color:#606778;">3 days ago</div></div></div>
+        </div>
+      </div>
+    </div></div>
+  </div>
+  <div class="device" id="s14d2" style="left:66%; transform:translate(-50%,-50%) scale(.62); opacity:0;">
+    <div class="iphone"><div class="screen"><div class="island"></div><div class="statusbar"><span>9:41</span><span>●●● WiFi 🔋</span></div><div class="home-bar"></div>
+      <div class="ui">
+        <div class="app-header"><div class="h1">Connection Test</div><div class="sub">5-step diagnostic</div></div>
+        <div style="padding:0 22px; display:flex; flex-direction:column; gap:8px;">
+          <div class="test-row pass"><span class="test-n">1</span><div style="flex:1;"><div style="font-weight:700; font-size:12px;">Environment variables</div><div style="font-size:10px; color:#8E95A5;">EXPO_PUBLIC_SUPABASE_URL · ANON_KEY</div></div><span class="badge green">✓</span></div>
+          <div class="test-row pass"><span class="test-n">2</span><div style="flex:1;"><div style="font-weight:700; font-size:12px;">Supabase client init</div><div style="font-size:10px; color:#8E95A5;">createClient() with SecureStore adapter</div></div><span class="badge green">✓</span></div>
+          <div class="test-row pass"><span class="test-n">3</span><div style="flex:1;"><div style="font-weight:700; font-size:12px;">Auth session refresh</div><div style="font-size:10px; color:#8E95A5;">alex@creator.io · JWT valid</div></div><span class="badge green">✓</span></div>
+          <div class="test-row pass"><span class="test-n">4</span><div style="flex:1;"><div style="font-weight:700; font-size:12px;">Public.profiles query</div><div style="font-size:10px; color:#8E95A5;">1 row · RLS pass</div></div><span class="badge green">✓</span></div>
+          <div class="test-row pass"><span class="test-n">5</span><div style="flex:1;"><div style="font-weight:700; font-size:12px;">Edge function reachable</div><div style="font-size:10px; color:#8E95A5;">generate-content · 200 OK</div></div><span class="badge green">✓</span></div>
+          <div class="test-banner pass">✅ All systems go. Backend is live.</div>
+        </div>
+      </div>
+    </div></div>
+  </div>
+</section>
+
+<style>
+.notif { display:flex; gap:10px; padding:10px 12px; background:rgba(20,23,36,.7); border-radius:12px; border:1px solid rgba(255,255,255,.06); }
+.notif.unread { background:rgba(255,94,58,.06); border-color:rgba(255,94,58,.15); }
+.test-row { display:flex; gap:10px; align-items:center; padding:10px; background:rgba(20,23,36,.7); border-radius:12px; border:1px solid rgba(255,255,255,.06); }
+.test-row.pass { border-color:rgba(0,245,160,.2); }
+.test-n { width:22px; height:22px; border-radius:50%; background:rgba(0,245,160,.15); color:#00F5A0; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:11px; }
+.test-banner { padding:12px; background:rgba(0,245,160,.1); border:1px solid rgba(0,245,160,.4); border-radius:12px; text-align:center; color:#00F5A0; font-weight:700; font-size:13px; margin-top:6px; }
+</style>
+
+<!-- ==================== SCENE 15 · ADMIN LOGIN (216-228s) ==================== -->
+<section id="s15" class="scene clip" data-start="216" data-duration="12" data-track-index="0">
+  <div class="stage-bg"></div>
+  <div class="glow orange"></div>
+  <div class="caption">
+    <div class="kicker">Admin · Access Control</div>
+    <div class="title">A separate front door for operators.</div>
+    <div class="sub">Role-based · super_admin gated · unauthorized redirect</div>
+  </div>
+  <div class="browser">
+    <div class="chrome"><div class="dots"><div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div></div><div class="urlbar"><span class="lock">🔒</span> admin.socialpilot.ai/login</div></div>
+    <div class="viewport">
+      <div style="height:100%; display:grid; grid-template-columns:1fr 1fr;">
+        <div style="background:linear-gradient(135deg,#0F1220,#06070B); padding:60px; display:flex; flex-direction:column; justify-content:center;">
+          <div style="display:flex; align-items:center; gap:14px; margin-bottom:24px;"><div style="width:56px; height:56px; border-radius:14px; background:linear-gradient(135deg,#FF5E3A,#FFAE00); display:flex; align-items:center; justify-content:center; font-weight:900; font-size:26px; color:#06070B;">SP</div><div><div style="font-weight:800; font-size:20px;">SocialPilot AI</div><div style="font-size:12px; color:#8E95A5;">Admin Console</div></div></div>
+          <div style="font-size:32px; font-weight:800; line-height:1.2; letter-spacing:-.02em;">Operate the<br/><span style="background:linear-gradient(135deg,#FF5E3A,#FFAE00); -webkit-background-clip:text; color:transparent;">entire fleet.</span></div>
+          <div style="color:#8E95A5; font-size:14px; margin-top:14px; max-width:420px; line-height:1.6;">Manage every user, subscription, template, and AI model from one console — with the security posture a real product needs.</div>
+          <div style="display:flex; gap:22px; margin-top:36px; font-size:11px; color:#606778;"><span>✓ RLS on every table</span><span>✓ Audit logs</span><span>✓ Rate-limited</span></div>
+        </div>
+        <div style="background:#06070B; padding:80px 60px; display:flex; align-items:center;">
+          <div style="width:100%;">
+            <div style="font-size:28px; font-weight:800; margin-bottom:6px;">Sign in</div>
+            <div style="color:#8E95A5; font-size:13px; margin-bottom:32px;">Admin access only. Users sign in from the mobile app.</div>
+            <div style="display:flex; flex-direction:column; gap:14px;">
+              <div><div style="font-size:11px; color:#8E95A5; letter-spacing:.1em; margin-bottom:6px;">EMAIL</div><div class="input filled" style="width:100%; padding:14px;">aliaslam7770@gmail.com</div></div>
+              <div><div style="font-size:11px; color:#8E95A5; letter-spacing:.1em; margin-bottom:6px;">PASSWORD</div><div class="input filled" style="width:100%; padding:14px;">••••••••••••••••</div></div>
+              <div class="btn primary" id="s15btn" style="width:100%; padding:14px; font-size:14px; margin-top:6px;">Sign in to Admin</div>
+              <div style="text-align:center; font-size:11px; color:#606778; margin-top:12px;">Protected by Supabase Auth · Middleware gate</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== SCENE 16 · ADMIN DASHBOARD (228-250s) ==================== -->
+<section id="s16" class="scene clip" data-start="228" data-duration="22" data-track-index="0">
+  <div class="stage-bg"></div>
+  <div class="glow orange"></div>
+  <div class="caption">
+    <div class="kicker">Admin · Dashboard</div>
+    <div class="title">One screen that tells you how the business is doing.</div>
+    <div class="sub">MRR · active users · AI spend · top content</div>
+  </div>
+  <div class="browser">
+    <div class="chrome"><div class="dots"><div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div></div><div class="urlbar"><span class="lock">🔒</span> admin.socialpilot.ai/dashboard</div></div>
+    <div class="viewport">
+      <div class="admin">
+        <div class="admin-side"><div class="brand"><div class="logo">SP</div><div class="name">SocialPilot Admin</div></div>
+          <div class="admin-nav"><div class="item on"><div class="ico"></div>Dashboard</div><div class="item"><div class="ico"></div>Users</div><div class="item"><div class="ico"></div>Posts</div><div class="item"><div class="ico"></div>Templates</div><div class="item"><div class="ico"></div>Analytics</div><div class="item"><div class="ico"></div>Subscriptions</div><div class="item"><div class="ico"></div>AI Settings</div><div class="item"><div class="ico"></div>Notifications</div><div class="item"><div class="ico"></div>White Label</div><div class="item"><div class="ico"></div>Settings</div></div>
+        </div>
+        <div class="admin-main">
+          <div class="admin-head"><h2>Good morning, Ali 👋</h2><div class="actions"><div style="font-size:12px; color:#8E95A5;">Last 30 days ▾</div><div class="btn primary" style="padding:8px 14px; font-size:12px;">+ New Template</div></div></div>
+          <div class="kpi-grid">
+            <div class="kpi" id="s16k1"><div class="lbl">Monthly Recurring</div><div class="num" data-count="$18,240">$0</div><div class="delta">↑ 12.4% vs last month</div></div>
+            <div class="kpi" id="s16k2"><div class="lbl">Active Users</div><div class="num" data-count="1,847">0</div><div class="delta">↑ 214 new</div></div>
+            <div class="kpi" id="s16k3"><div class="lbl">AI Calls Today</div><div class="num" data-count="8,412">0</div><div class="delta">↓ 3.1% · saving credits</div></div>
+            <div class="kpi" id="s16k4"><div class="lbl">Churn</div><div class="num" data-count="1.8%">0%</div><div class="delta down">↑ 0.2% needs attention</div></div>
+          </div>
+          <div style="display:grid; grid-template-columns: 2fr 1fr; gap:14px;">
+            <div class="chart-card">
+              <div class="chart-title">Revenue trend · last 12 months</div>
+              <div class="line-chart" style="height:180px;">
+                <svg viewBox="0 0 500 180" preserveAspectRatio="none"><defs><linearGradient id="s16grad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#FF5E3A" stop-opacity=".4"/><stop offset="100%" stop-color="#FF5E3A" stop-opacity="0"/></linearGradient></defs>
+                  <path id="s16area" d="" fill="url(#s16grad)"/><path id="s16line" d="" fill="none" stroke="#FF5E3A" stroke-width="3" stroke-linecap="round"/><path id="s16dash" d="M0,140 L500,60" fill="none" stroke="#8E95A5" stroke-width="1.5" stroke-dasharray="4 4" opacity=".5"/>
+                </svg>
+              </div>
+              <div style="display:flex; justify-content:space-between; font-size:10px; color:#606778; margin-top:6px;"><span>Oct '25</span><span>Nov</span><span>Dec</span><span>Jan</span><span>Feb</span><span>Mar</span><span>Apr</span><span>May</span><span>Jun</span><span>Jul</span><span>Aug</span><span>Sep</span></div>
+            </div>
+            <div class="chart-card">
+              <div class="chart-title">Platform split</div>
+              <div style="display:flex; align-items:center; gap:14px; margin-top:8px;">
+                <svg class="donut" viewBox="0 0 42 42"><circle cx="21" cy="21" r="16" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="6"/><circle id="s16d1" cx="21" cy="21" r="16" fill="none" stroke="#1DA1F2" stroke-width="6" stroke-dasharray="0 100" transform="rotate(-90 21 21)"/><circle id="s16d2" cx="21" cy="21" r="16" fill="none" stroke="#E4405F" stroke-width="6" stroke-dasharray="0 100" stroke-dashoffset="-38" transform="rotate(-90 21 21)"/><circle id="s16d3" cx="21" cy="21" r="16" fill="none" stroke="#0A66C2" stroke-width="6" stroke-dasharray="0 100" stroke-dashoffset="-69" transform="rotate(-90 21 21)"/><circle id="s16d4" cx="21" cy="21" r="16" fill="none" stroke="#00F5A0" stroke-width="6" stroke-dasharray="0 100" stroke-dashoffset="-88" transform="rotate(-90 21 21)"/></svg>
+                <div style="font-size:11px; display:flex; flex-direction:column; gap:5px;">
+                  <div><span style="display:inline-block; width:8px; height:8px; background:#1DA1F2; border-radius:2px; margin-right:6px;"></span>Twitter 38%</div>
+                  <div><span style="display:inline-block; width:8px; height:8px; background:#E4405F; border-radius:2px; margin-right:6px;"></span>Instagram 31%</div>
+                  <div><span style="display:inline-block; width:8px; height:8px; background:#0A66C2; border-radius:2px; margin-right:6px;"></span>LinkedIn 19%</div>
+                  <div><span style="display:inline-block; width:8px; height:8px; background:#00F5A0; border-radius:2px; margin-right:6px;"></span>TikTok 12%</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== SCENE 17 · ADMIN USERS (250-270s) ==================== -->
+<section id="s17" class="scene clip" data-start="250" data-duration="20" data-track-index="0" data-layout-allow-overlap>
+  <div class="stage-bg"></div>
+  <div class="glow gold" style="opacity:.3;"></div>
+  <div class="caption">
+    <div class="kicker">Admin · User Management</div>
+    <div class="title">Every user. Every role. One table.</div>
+    <div class="sub">Edit role · grant credits · suspend · CSV export</div>
+  </div>
+  <div class="browser">
+    <div class="chrome"><div class="dots"><div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div></div><div class="urlbar"><span class="lock">🔒</span> admin.socialpilot.ai/users</div></div>
+    <div class="viewport">
+      <div class="admin">
+        <div class="admin-side"><div class="brand"><div class="logo">SP</div><div class="name">SocialPilot Admin</div></div>
+          <div class="admin-nav"><div class="item"><div class="ico"></div>Dashboard</div><div class="item on"><div class="ico"></div>Users</div><div class="item"><div class="ico"></div>Posts</div><div class="item"><div class="ico"></div>Templates</div><div class="item"><div class="ico"></div>Analytics</div><div class="item"><div class="ico"></div>Subscriptions</div><div class="item"><div class="ico"></div>AI Settings</div></div>
+        </div>
+        <div class="admin-main">
+          <div class="admin-head"><h2>Users · 1,847</h2><div class="actions"><div class="input" style="padding:8px 14px; font-size:12px; width:220px;">🔍 Search email or name…</div><div class="btn ghost" style="padding:8px 14px; font-size:12px;">⬇ Export CSV</div></div></div>
+          <div style="background:#0C0E17; border:1px solid rgba(255,255,255,.08); border-radius:14px; overflow:hidden;">
+            <table class="data-tbl">
+              <thead><tr><th style="width:36px;"><input type="checkbox"/></th><th>User</th><th>Role</th><th>Tier</th><th>Credits</th><th>Joined</th><th>Status</th><th></th></tr></thead>
+              <tbody>
+                <tr id="s17r1"><td><input type="checkbox"/></td><td><div class="avatar">AR</div><div style="display:inline-block; vertical-align:middle;"><div style="font-weight:700;">Alex Rivera</div><div style="font-size:11px; color:#8E95A5;">alex@creator.io</div></div></td><td><span class="badge">user</span></td><td><span class="badge orange">Pro</span></td><td>247 / 500</td><td>Mar 2026</td><td><span class="badge green">active</span></td><td style="color:#8E95A5;">⋮</td></tr>
+                <tr id="s17r2" data-layout-allow-overlap><td><input type="checkbox"/></td><td data-layout-allow-overlap><div class="avatar" style="background:linear-gradient(135deg,#00F5A0,#00D2FF);">SK</div><div style="display:inline-block; vertical-align:middle;" data-layout-allow-overlap><div style="font-weight:700;" data-layout-allow-overlap>Sara Kim</div><div style="font-size:11px; color:#8E95A5;" data-layout-allow-overlap>sara@studio.io</div></div></td><td data-layout-allow-overlap><span class="badge" data-layout-allow-overlap style="background:rgba(255,56,92,.15); color:#FF385C; border:1px solid rgba(255,56,92,.35);">super_admin</span></td><td><span class="badge orange">Agency</span></td><td>4,812 / 10K</td><td>Jan 2026</td><td><span class="badge green">active</span></td><td style="color:#8E95A5;">⋮</td></tr>
+                <tr id="s17r3" data-layout-allow-overlap><td><input type="checkbox"/></td><td data-layout-allow-overlap><div class="avatar" style="background:linear-gradient(135deg,#FF385C,#8B5CF6);">MJ</div><div style="display:inline-block; vertical-align:middle;" data-layout-allow-overlap><div style="font-weight:700;" data-layout-allow-overlap>Marcus Johnson</div><div style="font-size:11px; color:#8E95A5;" data-layout-allow-overlap>marcus@growth.co</div></div></td><td><span class="badge" style="background:rgba(255,174,0,.15); color:#FFAE00; border:1px solid rgba(255,174,0,.35);">admin</span></td><td><span class="badge orange">Pro</span></td><td>1,203 / 2.5K</td><td>Feb 2026</td><td><span class="badge green">active</span></td><td style="color:#8E95A5;">⋮</td></tr>
+                <tr id="s17r4"><td><input type="checkbox"/></td><td><div class="avatar" style="background:linear-gradient(135deg,#38BDF8,#6366F1);">DP</div><div style="display:inline-block; vertical-align:middle;"><div style="font-weight:700;">Dev Patel</div><div style="font-size:11px; color:#8E95A5;">dev@content.in</div></div></td><td><span class="badge">user</span></td><td><span class="badge" style="background:rgba(255,255,255,.06); color:#8E95A5;">Free</span></td><td>42 / 100</td><td>Aug 2026</td><td><span class="badge green">active</span></td><td style="color:#8E95A5;">⋮</td></tr>
+                <tr id="s17r5" class="on"><td><input type="checkbox" checked/></td><td><div class="avatar" style="background:linear-gradient(135deg,#A1A1AA,#52525B); color:#000;">LF</div><div style="display:inline-block; vertical-align:middle;"><div style="font-weight:700;">Luna Feng</div><div style="font-size:11px; color:#8E95A5;">luna@brand.io</div></div></td><td><span class="badge">user</span></td><td><span class="badge orange">Starter</span></td><td>118 / 500</td><td>Jul 2026</td><td><span class="badge pink">suspended</span></td><td style="color:#8E95A5;">⋮</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div style="display:flex; justify-content:space-between; margin-top:12px; font-size:11px; color:#8E95A5;"><span>Showing 5 of 1,847</span><span>‹ 1 2 3 … 370 ›</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- Role edit modal overlay -->
+  <div id="s17modal" data-layout-allow-overlap class="scene-overlay" style="position:absolute; inset:0; background:rgba(0,0,0,.7); display:flex; align-items:center; justify-content:center; z-index:40; opacity:0;">
+    <div data-layout-allow-overlap style="width:520px; background:#0C0E17; border:1px solid rgba(255,255,255,.1); border-radius:20px; padding:26px; box-shadow:0 40px 80px rgba(0,0,0,.6);">
+      <div data-layout-allow-overlap style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;"><div data-layout-allow-overlap style="font-weight:800; font-size:18px;">Edit user · Luna Feng</div><div style="color:#8E95A5; font-size:20px;">×</div></div>
+      <div data-layout-allow-overlap style="font-size:11px; color:#8E95A5; letter-spacing:.1em; margin-bottom:8px;">ROLE</div>
+      <div style="display:flex; gap:8px;">
+        <div class="role-pill sel">user</div><div class="role-pill">admin</div><div class="role-pill">super_admin</div>
+      </div>
+      <div style="font-size:11px; color:#8E95A5; letter-spacing:.1em; margin:18px 0 8px;">CREDITS REMAINING</div>
+      <div style="display:flex; align-items:center; gap:12px;"><div class="input" style="padding:10px 14px; font-weight:700; color:#fff;">118</div><div style="font-size:11px; color:#8E95A5;">of 500</div></div>
+      <div style="display:flex; gap:8px; margin-top:10px;"><div class="btn ghost" style="padding:6px 12px; font-size:11px;">+ 100</div><div class="btn ghost" style="padding:6px 12px; font-size:11px;">+ 500</div><div class="btn ghost" style="padding:6px 12px; font-size:11px;">Refill max</div></div>
+      <div style="display:flex; gap:8px; margin-top:22px;"><div class="btn primary" style="flex:1; padding:12px;">Save changes</div><div class="btn ghost" style="flex:1; padding:12px;">Cancel</div></div>
+    </div>
+  </div>
+</section>
+
+<style>
+.role-pill { padding:8px 16px; border-radius:100px; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1); font-size:12px; font-weight:700; color:#8E95A5; font-family:'JetBrains Mono',monospace; }
+.role-pill.sel { background:linear-gradient(135deg,#FF5E3A,#FFAE00); color:#06070B; border-color:transparent; }
+</style>
+
+<!-- ==================== SCENE 18 · ADMIN POSTS + TEMPLATES (270-288s) ==================== -->
+<section id="s18" class="scene clip" data-start="270" data-duration="18" data-track-index="0">
+  <div class="stage-bg"></div>
+  <div class="glow pink" style="opacity:.25;"></div>
+  <div class="caption">
+    <div class="kicker">Admin · Content Ops</div>
+    <div class="title">Moderate posts, curate templates.</div>
+    <div class="sub">Filter by user / platform / status · Template marketplace</div>
+  </div>
+  <div class="browser">
+    <div class="chrome"><div class="dots"><div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div></div><div class="urlbar"><span class="lock">🔒</span> admin.socialpilot.ai/templates</div></div>
+    <div class="viewport">
+      <div class="admin">
+        <div class="admin-side"><div class="brand"><div class="logo">SP</div><div class="name">SocialPilot Admin</div></div>
+          <div class="admin-nav"><div class="item"><div class="ico"></div>Dashboard</div><div class="item"><div class="ico"></div>Users</div><div class="item"><div class="ico"></div>Posts</div><div class="item on"><div class="ico"></div>Templates</div><div class="item"><div class="ico"></div>Analytics</div></div>
+        </div>
+        <div class="admin-main">
+          <div class="admin-head"><h2>Templates · 24</h2><div class="actions"><div class="btn ghost" style="padding:8px 14px; font-size:12px;">Import</div><div class="btn primary" style="padding:8px 14px; font-size:12px;">+ New Template</div></div></div>
+          <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:12px;">
+            <div class="tpl"><div style="font-size:24px;">🎯</div><div class="tpl-name">Product Launch Thread</div><div class="tpl-meta">Twitter · 1.2K uses · <span style="color:#00F5A0;">Popular</span></div></div>
+            <div class="tpl"><div style="font-size:24px;">🔥</div><div class="tpl-name">Founder Story Post</div><div class="tpl-meta">LinkedIn · 890 uses</div></div>
+            <div class="tpl"><div style="font-size:24px;">📈</div><div class="tpl-name">Case Study Carousel</div><div class="tpl-meta">Instagram · 624 uses</div></div>
+            <div class="tpl"><div style="font-size:24px;">💡</div><div class="tpl-name">Tips Listicle</div><div class="tpl-meta">Multi · 2.1K uses · <span style="color:#FFAE00;">Trending</span></div></div>
+            <div class="tpl"><div style="font-size:24px;">🎉</div><div class="tpl-name">Milestone Celebration</div><div class="tpl-meta">LinkedIn · 445 uses</div></div>
+            <div class="tpl"><div style="font-size:24px;">❓</div><div class="tpl-name">Question Hook</div><div class="tpl-meta">Twitter · 1.8K uses</div></div>
+            <div class="tpl"><div style="font-size:24px;">🛒</div><div class="tpl-name">Product Drop</div><div class="tpl-meta">Instagram · 320 uses</div></div>
+            <div class="tpl"><div style="font-size:24px;">🎬</div><div class="tpl-name">Short-Form Script</div><div class="tpl-meta">TikTok · 962 uses · <span style="color:#00F5A0;">Popular</span></div></div>
+          </div>
+          <div style="margin-top:22px; font-size:12px; color:#8E95A5; letter-spacing:.1em; font-weight:700;">RECENT POSTS · ACROSS ALL USERS</div>
+          <div style="margin-top:8px; background:#0C0E17; border:1px solid rgba(255,255,255,.08); border-radius:14px; overflow:hidden;">
+            <table class="data-tbl">
+              <thead><tr><th>User</th><th>Platform</th><th>Content</th><th>Status</th><th>Scheduled</th><th>Engagement</th></tr></thead>
+              <tbody>
+                <tr><td>Alex Rivera</td><td><span class="badge" style="background:rgba(29,161,242,.15); color:#1DA1F2;">𝕏</span></td><td style="color:#8E95A5;">"Ship the features your users ask for..."</td><td><span class="badge green">published</span></td><td>2h ago</td><td>2.3K</td></tr>
+                <tr><td>Sara Kim</td><td><span class="badge" style="background:rgba(228,64,95,.15); color:#E4405F;">IG</span></td><td style="color:#8E95A5;">"Behind the scenes of our launch..."</td><td><span class="badge orange">scheduled</span></td><td>Tomorrow 9AM</td><td>—</td></tr>
+                <tr><td>Marcus J.</td><td><span class="badge" style="background:rgba(10,102,194,.15); color:#0A66C2;">LI</span></td><td style="color:#8E95A5;">"The best product teams instrument..."</td><td><span class="badge pink">failed</span></td><td>—</td><td>—</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+.tpl { background:#0C0E17; border:1px solid rgba(255,255,255,.08); border-radius:14px; padding:16px; }
+.tpl:hover, .tpl.sel { border-color:rgba(255,94,58,.5); background:linear-gradient(135deg, rgba(255,94,58,.1), rgba(12,14,23,.85)); }
+.tpl-name { font-weight:700; font-size:14px; margin-top:8px; }
+.tpl-meta { font-size:11px; color:#8E95A5; margin-top:4px; }
+</style>
+
+<!-- ==================== SCENE 19 · ADMIN ANALYTICS (288-304s) ==================== -->
+<section id="s19" class="scene clip" data-start="288" data-duration="16" data-track-index="0">
+  <div class="stage-bg"></div>
+  <div class="glow orange"></div>
+  <div class="caption">
+    <div class="kicker">Admin · Deep Analytics</div>
+    <div class="title">Every metric, every cohort, one query away.</div>
+    <div class="sub">MRR waterfall · AI usage heatmap · platform share</div>
+  </div>
+  <div class="browser">
+    <div class="chrome"><div class="dots"><div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div></div><div class="urlbar"><span class="lock">🔒</span> admin.socialpilot.ai/analytics</div></div>
+    <div class="viewport">
+      <div class="admin">
+        <div class="admin-side"><div class="brand"><div class="logo">SP</div><div class="name">SocialPilot Admin</div></div>
+          <div class="admin-nav"><div class="item"><div class="ico"></div>Dashboard</div><div class="item"><div class="ico"></div>Users</div><div class="item"><div class="ico"></div>Analytics</div><div class="item on"><div class="ico"></div>Analytics</div><div class="item"><div class="ico"></div>Subscriptions</div></div>
+        </div>
+        <div class="admin-main">
+          <div class="admin-head"><h2>Analytics</h2><div class="actions"><div style="font-size:12px; color:#8E95A5;">Sep 2026 ▾</div><div class="btn ghost" style="padding:8px 14px; font-size:12px;">⬇ Export</div></div></div>
+          <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:14px;">
+            <div class="chart-card"><div class="chart-title">AI calls / day</div><div class="bars"><div class="bar" data-h="30%"></div><div class="bar" data-h="45%"></div><div class="bar" data-h="50%"></div><div class="bar" data-h="65%"></div><div class="bar" data-h="70%"></div><div class="bar" data-h="55%"></div><div class="bar" data-h="80%"></div><div class="bar" data-h="72%"></div><div class="bar" data-h="90%"></div><div class="bar" data-h="85%"></div></div></div>
+            <div class="chart-card"><div class="chart-title">New signups / day</div><div class="bars"><div class="bar alt" data-h="20%"></div><div class="bar alt" data-h="35%"></div><div class="bar alt" data-h="40%"></div><div class="bar alt" data-h="55%"></div><div class="bar alt" data-h="45%"></div><div class="bar alt" data-h="60%"></div><div class="bar alt" data-h="50%"></div><div class="bar alt" data-h="65%"></div><div class="bar alt" data-h="70%"></div><div class="bar alt" data-h="85%"></div></div></div>
+            <div class="chart-card"><div class="chart-title">Platform share</div>
+              <div style="display:flex; flex-direction:column; gap:8px; margin-top:8px;">
+                <div><div style="display:flex; justify-content:space-between; font-size:11px;"><span>Share of voice</span><span>38%</span></div><div style="height:6px; background:rgba(255,255,255,.06); border-radius:3px; margin-top:3px; overflow:hidden;"><div class="share-bar" style="width:0%; background:#1DA1F2; height:100%;" data-w="38%"></div></div></div>
+                <div><div style="display:flex; justify-content:space-between; font-size:11px;"><span>Instagram</span><span>31%</span></div><div style="height:6px; background:rgba(255,255,255,.06); border-radius:3px; margin-top:3px; overflow:hidden;"><div class="share-bar" style="width:0%; background:#E4405F; height:100%;" data-w="31%"></div></div></div>
+                <div><div style="display:flex; justify-content:space-between; font-size:11px;"><span>LinkedIn</span><span>19%</span></div><div style="height:6px; background:rgba(255,255,255,.06); border-radius:3px; margin-top:3px; overflow:hidden;"><div class="share-bar" style="width:0%; background:#0A66C2; height:100%;" data-w="19%"></div></div></div>
+                <div><div style="display:flex; justify-content:space-between; font-size:11px;"><span>TikTok</span><span>12%</span></div><div style="height:6px; background:rgba(255,255,255,.06); border-radius:3px; margin-top:3px; overflow:hidden;"><div class="share-bar" style="width:0%; background:#00F5A0; height:100%;" data-w="12%"></div></div></div>
+              </div>
+            </div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-title">Top performing posts</div>
+            <table class="data-tbl" style="margin-top:8px;">
+              <thead><tr><th>#</th><th>Author</th><th>Platform</th><th>Reach</th><th>Engagement</th><th>Δ</th></tr></thead>
+              <tbody>
+                <tr><td>1</td><td>Alex Rivera</td><td>𝕏</td><td>24.8K</td><td>8.2%</td><td style="color:#00F5A0;">↑ 340%</td></tr>
+                <tr><td>2</td><td>Sara Kim</td><td>IG</td><td>18.3K</td><td>7.4%</td><td style="color:#00F5A0;">↑ 210%</td></tr>
+                <tr><td>3</td><td>Marcus J.</td><td>LI</td><td>12.1K</td><td>6.8%</td><td style="color:#00F5A0;">↑ 118%</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== SCENE 20 · ADMIN SUBSCRIPTIONS + AI SETTINGS + WHITE LABEL (304-324s) ==================== -->
+<section id="s20" class="scene clip" data-start="304" data-duration="20" data-track-index="0">
+  <div class="stage-bg"></div>
+  <div class="glow gold" style="opacity:.3;"></div>
+  <div class="caption">
+    <div class="kicker">Monetization · AI · Brand</div>
+    <div class="title">Ship your own brand on this engine.</div>
+    <div class="sub">Tier pricing · model selection · white-label colors & logo</div>
+  </div>
+  <div class="browser">
+    <div class="chrome"><div class="dots"><div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div></div><div class="urlbar"><span class="lock">🔒</span> admin.socialpilot.ai/white-label</div></div>
+    <div class="viewport">
+      <div class="admin">
+        <div class="admin-side"><div class="brand"><div class="logo">SP</div><div class="name">SocialPilot Admin</div></div>
+          <div class="admin-nav"><div class="item"><div class="ico"></div>Subscriptions</div><div class="item"><div class="ico"></div>AI Settings</div><div class="item on"><div class="ico"></div>White Label</div><div class="item"><div class="ico"></div>Settings</div></div>
+        </div>
+        <div class="admin-main">
+          <div class="admin-head"><h2>White Label</h2><div class="actions"><div class="btn ghost" style="padding:8px 14px; font-size:12px;">Reset</div><div class="btn primary" style="padding:8px 14px; font-size:12px;">Publish changes</div></div></div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+            <div>
+              <div style="font-size:11px; color:#8E95A5; letter-spacing:.1em; font-weight:700; margin-bottom:8px;">BRAND IDENTITY</div>
+              <div style="display:flex; flex-direction:column; gap:10px;">
+                <div><div style="font-size:11px; color:#8E95A5; margin-bottom:4px;">Product name</div><div class="input filled" style="padding:10px 14px; font-size:13px;">SocialPilot AI Pro</div></div>
+                <div><div style="font-size:11px; color:#8E95A5; margin-bottom:4px;">Support email</div><div class="input filled" style="padding:10px 14px; font-size:13px;">support@socialpilot.ai</div></div>
+                <div><div style="font-size:11px; color:#8E95A5; margin-bottom:4px;">Primary color</div>
+                  <div style="display:flex; gap:8px;">
+                    <div class="wl-sw" style="background:#FF5E3A; box-shadow:0 0 0 3px #fff;"></div>
+                    <div class="wl-sw" style="background:#00F5A0;"></div>
+                    <div class="wl-sw" style="background:#FF2A85;"></div>
+                    <div class="wl-sw" style="background:#38BDF8;"></div>
+                    <div class="wl-sw" style="background:#F4F4F5;"></div>
+                    <div class="input" style="flex:1; padding:8px 12px; font-family:'JetBrains Mono',monospace; font-size:12px;">#FF5E3A</div>
+                  </div>
+                </div>
+                <div><div style="font-size:11px; color:#8E95A5; margin-bottom:4px;">Font family</div><div style="display:flex; gap:8px;"><div class="font-pill sel">Inter</div><div class="font-pill">Roboto</div><div class="font-pill">SF Pro</div><div class="font-pill">Manrope</div></div></div>
+                <div><div style="font-size:11px; color:#8E95A5; margin-bottom:4px;">Border radius</div><input class="range" type="range" min="0" max="24" value="14"/></div>
+                <div><div style="font-size:11px; color:#8E95A5; margin-bottom:6px;">Enable features</div>
+                  <div style="display:flex; flex-direction:column; gap:8px;">
+                    <div class="feat-toggle"><span>AI Image Generation</span><div class="toggle on"><div class="knob"></div></div></div>
+                    <div class="feat-toggle"><span>Team / Multi-seat</span><div class="toggle on"><div class="knob"></div></div></div>
+                    <div class="feat-toggle"><span>API Access</span><div class="toggle"><div class="knob"></div></div></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <div style="font-size:11px; color:#8E95A5; letter-spacing:.1em; font-weight:700; margin-bottom:8px;">LIVE PREVIEW</div>
+              <div style="background:linear-gradient(135deg,#0C0E17,#06070B); border:1px solid rgba(255,255,255,.08); border-radius:14px; padding:20px; height:520px; overflow:hidden;">
+                <div style="display:flex; align-items:center; gap:10px; margin-bottom:16px;"><div style="width:32px; height:32px; border-radius:8px; background:linear-gradient(135deg,#FF5E3A,#FFAE00);"></div><div style="font-weight:800; font-size:14px;">SocialPilot AI Pro</div></div>
+                <div style="background:rgba(255,94,58,.08); border:1px solid rgba(255,94,58,.3); border-radius:14px; padding:14px; margin-bottom:10px;"><div style="font-weight:700; font-size:14px;">Welcome</div><div style="font-size:12px; color:#8E95A5; margin-top:4px;">Your brand, your colors, your domain — all controlled here.</div></div>
+                <div style="display:flex; gap:8px; margin-bottom:10px;"><div style="flex:1; height:60px; background:rgba(255,255,255,.04); border-radius:12px;"></div><div style="flex:1; height:60px; background:rgba(255,255,255,.04); border-radius:12px;"></div></div>
+                <div style="padding:12px; background:linear-gradient(135deg,#FF5E3A,#FFAE00); border-radius:12px; color:#06070B; font-weight:800; text-align:center; font-size:14px;">Primary CTA</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+.wl-sw { width:32px; height:32px; border-radius:8px; cursor:pointer; }
+.font-pill { padding:6px 12px; border-radius:8px; background:rgba(255,255,255,.05); font-size:12px; color:#8E95A5; border:1px solid rgba(255,255,255,.08); }
+.font-pill.sel { background:rgba(255,94,58,.15); color:#FF5E3A; border-color:rgba(255,94,58,.4); font-weight:700; }
+.range { width:100%; -webkit-appearance:none; height:6px; background:rgba(255,255,255,.1); border-radius:3px; outline:none; }
+.range::-webkit-slider-thumb { -webkit-appearance:none; width:16px; height:16px; background:linear-gradient(135deg,#FF5E3A,#FFAE00); border-radius:50%; }
+.feat-toggle { display:flex; justify-content:space-between; align-items:center; padding:10px 14px; background:rgba(255,255,255,.03); border-radius:10px; font-size:12px; }
+</style>
+
+<!-- ==================== SCENE 21 · ADMIN SETTINGS + NOTIF + TEST (324-336s) ==================== -->
+<section id="s21" class="scene clip" data-start="324" data-duration="12" data-track-index="0">
+  <div class="stage-bg"></div>
+  <div class="glow mint" style="background:#00F5A0; opacity:.25; top:-200px; right:-100px;"></div>
+  <div class="caption">
+    <div class="kicker">Admin · Ops & Diagnostics</div>
+    <div class="title">Settings · Notifications · Connection health.</div>
+    <div class="sub">The last three tabs that make it production-ready</div>
+  </div>
+  <div style="position:absolute; left:60px; right:60px; top:180px; bottom:60px; display:grid; grid-template-columns:repeat(3,1fr); gap:20px;">
+    <div class="admin-tile">
+      <div class="at-head">⚙️ General Settings</div>
+      <div style="display:flex; flex-direction:column; gap:8px; font-size:12px;">
+        <div class="at-row"><span>Platform timezone</span><span style="color:#FFAE00;">UTC-8 (PST)</span></div>
+        <div class="at-row"><span>Signup allowed</span><span style="color:#00F5A0;">On</span></div>
+        <div class="at-row"><span>Maintenance mode</span><span style="color:#8E95A5;">Off</span></div>
+        <div class="at-row"><span>Max uploads / user</span><span style="color:#8E95A5;">500 MB</span></div>
+        <div class="at-row"><span>Session timeout</span><span style="color:#8E95A5;">30 days</span></div>
+        <div class="at-row"><span>Webhook URL</span><span style="color:#8E95A5; font-family:'JetBrains Mono',monospace; font-size:11px;">hooks.socialpilot.ai/…</span></div>
+      </div>
+    </div>
+    <div class="admin-tile">
+      <div class="at-head">🔔 Notifications</div>
+      <div style="display:flex; flex-direction:column; gap:8px; font-size:12px;">
+        <div class="at-row"><span>New user signup</span><div class="toggle on"><div class="knob"></div></div></div>
+        <div class="at-row"><span>Failed publishes</span><div class="toggle on"><div class="knob"></div></div></div>
+        <div class="at-row"><span>AI quota warnings</span><div class="toggle on"><div class="knob"></div></div></div>
+        <div class="at-row"><span>Churn alerts</span><div class="toggle on"><div class="knob"></div></div></div>
+        <div class="at-row"><span>Digest email</span><span style="color:#8E95A5;">Daily · 8AM</span></div>
+        <div class="at-row"><span>Slack integration</span><span style="color:#FF5E3A;">#ops-alerts</span></div>
+      </div>
+    </div>
+    <div class="admin-tile">
+      <div class="at-head">🔌 Connection Test</div>
+      <div style="display:flex; flex-direction:column; gap:8px; font-size:12px;">
+        <div class="at-row pass"><span>1 · Env vars</span><span class="badge green">✓ 200ms</span></div>
+        <div class="at-row pass"><span>2 · Supabase client</span><span class="badge green">✓ Init</span></div>
+        <div class="at-row pass"><span>3 · Auth session</span><span class="badge green">✓ JWT valid</span></div>
+        <div class="at-row pass"><span>4 · profiles query</span><span class="badge green">✓ 1,847 rows</span></div>
+        <div class="at-row pass"><span>5 · RLS policy</span><span class="badge green">✓ Enforced</span></div>
+        <div style="margin-top:8px; padding:10px; background:rgba(0,245,160,.1); border:1px solid rgba(0,245,160,.4); border-radius:10px; text-align:center; color:#00F5A0; font-weight:700;">All systems go.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+.admin-tile { background:#0C0E17; border:1px solid rgba(255,255,255,.08); border-radius:16px; padding:20px; }
+.at-head { font-weight:800; font-size:16px; margin-bottom:14px; }
+.at-row { display:flex; justify-content:space-between; align-items:center; padding:8px 12px; background:rgba(255,255,255,.03); border-radius:8px; }
+.at-row.pass { border-left:2px solid #00F5A0; }
+</style>
+
+<!-- ==================== SCENE 22 · PLATFORM LINEUP (336-348s) ==================== -->
+<section id="s22" class="scene clip" data-start="336" data-duration="12" data-track-index="0">
+  <div class="stage-bg"></div>
+  <div class="glow orange" style="opacity:.35;"></div>
+  <div class="glow gold" style="opacity:.3; left:70%; top:60%;"></div>
+  <div class="caption" style="top:70px;">
+    <div class="kicker">One codebase</div>
+    <div class="title" style="font-size:44px;">Everywhere your users already are.</div>
+  </div>
+  <!-- 3 devices: iPhone, Android, browser -->
+  <div class="device" id="s22d1" style="left:22%; top:66%; transform:translate(-50%,-50%) scale(.5); opacity:0;">
+    <div class="iphone"><div class="screen"><div class="island"></div><div class="statusbar"><span>9:41</span><span>●●● WiFi 🔋</span></div><div class="home-bar"></div>
+      <div class="ui" style="padding-top:110px; text-align:center;"><div style="font-size:80px;">📱</div><div style="font-size:24px; font-weight:800; margin-top:14px;">iOS App</div><div style="font-size:12px; color:#8E95A5; margin-top:4px;">Expo · React Native</div></div>
+    </div></div>
+  </div>
+  <div class="device" id="s22d2" style="left:50%; top:66%; transform:translate(-50%,-50%) scale(.5); opacity:0;">
+    <div class="android"><div class="screen"><div class="punch"></div><div class="statusbar"><span>9:41</span><span>📶 🔋</span></div>
+      <div class="ui" style="padding-top:120px; text-align:center;"><div style="font-size:80px;">🤖</div><div style="font-size:24px; font-weight:800; margin-top:14px;">Android App</div><div style="font-size:12px; color:#8E95A5; margin-top:4px;">Same code · native APK</div></div>
+      <div class="navbar"><span class="back"></span><span class="home"></span><span class="recents"></span></div>
+    </div></div>
+  </div>
+  <div class="device" id="s22d3" style="left:78%; top:66%; transform:translate(-50%,-50%) scale(.5); opacity:0;">
+    <div style="width:520px; height:380px; background:#0C0E17; border-radius:12px; overflow:hidden; box-shadow:0 30px 60px rgba(0,0,0,.7), 0 20px 40px rgba(255,94,58,.2);">
+      <div style="height:28px; background:#0F1220; display:flex; align-items:center; padding:0 10px; gap:6px;"><div class="dot red" style="width:9px; height:9px; border-radius:50%; background:#FF5F57;"></div><div class="dot yellow" style="width:9px; height:9px; border-radius:50%; background:#FEBC2E;"></div><div class="dot green" style="width:9px; height:9px; border-radius:50%; background:#28C840;"></div><div style="flex:1; text-align:center; font-size:10px; color:#8E95A5;">admin.socialpilot.ai</div></div>
+      <div style="height:352px; background:#06070B; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px;"><div style="font-size:70px;">🖥️</div><div style="font-size:22px; font-weight:800; margin-top:10px;">Web Admin</div><div style="font-size:12px; color:#8E95A5; margin-top:4px;">Next.js 14 · TanStack Table</div></div>
+    </div>
+  </div>
+  <div style="position:absolute; left:50%; top:calc(50% + 260px); transform:translate(-50%,-50%); text-align:center; font-size:14px; color:#8E95A5; letter-spacing:.3em; font-weight:600; text-transform:uppercase;" id="s22tag">Shared packages · tokens · types · supabase client</div>
+</section>
+
+<!-- ==================== SCENE 23 · FEATURE BADGES RECAP (348-362s) ==================== -->
+<section id="s23" class="scene clip" data-start="348" data-duration="14" data-track-index="0">
+  <div class="stage-bg"></div>
+  <div class="glow orange"></div>
+  <div class="glow gold" style="top:60%; left:70%;"></div>
+  <div class="caption">
+    <div class="kicker">What you just watched</div>
+    <div class="title">Twenty-four features. One product.</div>
+  </div>
+  <div class="badges">
+    <div class="chip hot" id="s23c1"><span class="dot" style="background:#FF5E3A;"></span>AI Content Studio</div>
+    <div class="chip mint" id="s23c2"><span class="dot" style="background:#00F5A0;"></span>Multi-Platform Publish</div>
+    <div class="chip gold" id="s23c3"><span class="dot" style="background:#FFAE00;"></span>Smart Calendar</div>
+    <div class="chip pink" id="s23c4"><span class="dot" style="background:#FF385C;"></span>Realtime Analytics</div>
+    <div class="chip" id="s23c5"><span class="dot" style="background:#8E95A5;"></span>Supabase Auth · Google OAuth</div>
+    <div class="chip" id="s23c6"><span class="dot" style="background:#8E95A5;"></span>Team & Roles (4 tiers)</span>
+    <div class="chip hot" id="s23c7"><span class="dot" style="background:#FF5E3A;"></span>Notes → AI Rewrite</div>
+    <div class="chip mint" id="s23c8"><span class="dot" style="background:#00F5A0;"></span>5 Connected Networks</div>
+    <div class="chip gold" id="s23c9"><span class="dot" style="background:#FFAE00;"></span>Paywall · Stripe-ready</div>
+    <div class="chip pink" id="s23c10"><span class="dot" style="background:#FF385C;"></span>Push Notifications</div>
+    <div class="chip" id="s23c11"><span class="dot" style="background:#8E95A5;"></span>Admin Dashboard</div>
+    <div class="chip hot" id="s23c12"><span class="dot" style="background:#FF5E3A;"></span>User Directory · CSV</div>
+    <div class="chip mint" id="s23c13"><span class="dot" style="background:#00F5A0;"></span>Template Marketplace</div>
+    <div class="chip gold" id="s23c14"><span class="dot" style="background:#FFAE00;"></span>White-Label Studio</div>
+    <div class="chip pink" id="s23c15"><span class="dot" style="background:#FF385C;"></span>5-Step Health Check</div>
+    <div class="chip" id="s23c16"><span class="dot" style="background:#8E95A5;"></span>RLS · SECURITY DEFINER</div>
+  </div>
+</section>
+
+<!-- ==================== SCENE 24 · CONTACT FINALE (362-382s) ==================== -->
+<section id="s24" class="scene clip" data-start="362" data-duration="20" data-track-index="0">
+  <div class="stage-bg"></div>
+  <div class="glow orange" style="opacity:.4;"></div>
+  <div class="glow gold" style="opacity:.35; top:20%; left:60%;"></div>
+  <div class="glow pink" style="opacity:.25; top:70%; left:20%;"></div>
+  <div class="contact-card">
+    <div class="by" id="s24by">Designed & built, end to end by</div>
+    <div class="name" id="s24name">Ali Aslam<span class="handle" id="s24handle">@vampie</span></div>
+    <div class="roles" id="s24roles">Apps · Websites · POS systems — for iOS, Android, macOS & Web</div>
+    <div class="divider"></div>
+    <div class="rows">
+      <div class="row" id="s24r1"><div class="emj">💬</div><div class="lbl">WhatsApp</div><div class="val strong">03036112299</div></div>
+      <div class="row" id="s24r2"><div class="emj">✉️</div><div class="lbl">Email</div><div class="val">aliaslam7770@gmail.com · alibhatti6382@gmail.com</div></div>
+      <div class="row" id="s24r3"><div class="emj">🐙</div><div class="lbl">GitHub</div><div class="val">github.com/<span class="strong" style="color:#FFAE00;">Vampie0</span></div></div>
+      <div class="row" id="s24r4"><div class="emj">in</div><div class="lbl">LinkedIn</div><div class="val">linkedin.com/in/<span class="strong" style="color:#FFAE00;">ali-aslam-586683259</span></div></div>
+    </div>
+    <div class="cta" id="s24cta">DM for a live demo · tell me what you want changed — I'll build it.</div>
+    <div class="foot" id="s24foot">Buying this product? Customization available — message me.</div>
+  </div>
+  <div style="position:absolute; bottom:36px; left:50%; transform:translateX(-50%); font-size:11px; color:#606778; letter-spacing:.4em; font-weight:600; text-transform:uppercase; opacity:0;" id="s24brand">SocialPilot AI Pro · Built with ♥ by vampie</div>
+</section>
+
+</div>
+<script>
+const tl = gsap.timeline({ paused: true });
+window.__timelines["main"] = tl;
+
+/* ---- Scene visibility helper: fade in at start, fade out just before end ---- */
+function sceneWindow(id, start, dur, fadeIn = 0.35, fadeOut = 0.35) {
+  tl.fromTo("#" + id, { opacity: 0 }, { opacity: 1, duration: fadeIn, ease: "power2.out", immediateRender: false }, start);
+  tl.to("#" + id, { opacity: 0, duration: fadeOut, ease: "power2.in" }, start + dur - fadeOut);
+}
+
+/* ============ S1 HOOK (0-8) ============ */
+sceneWindow("s1", 0, 8, 0.2, 0.35);
+tl.fromTo("#s1g1", { x: -100, y: -100, opacity: 0 }, { x: 200, y: 100, opacity: .35, duration: 7, ease: "power1.inOut" }, 0);
+tl.fromTo("#s1g2", { x: 200, y: 200, opacity: 0 }, { x: -100, y: 0, opacity: .3, duration: 7, ease: "power1.inOut" }, 0);
+tl.fromTo("#s1lead", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: .6, ease: "power3.out" }, 0.4);
+tl.fromTo("#s1w1", { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: .5, ease: "back.out(2)" }, 1.1);
+tl.fromTo("#s1w2", { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: .5, ease: "back.out(2)" }, 1.4);
+["s1p1","s1p2","s1p3","s1p4"].forEach((id,i)=> tl.fromTo("#"+id, { opacity:0, scale:.7, y:20 }, { opacity:1, scale:1, y:0, duration:.5, ease:"back.out(2)" }, 2.4 + i*0.25));
+tl.fromTo("#s1tag", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: .6, ease: "power3.out" }, 4.2);
+
+/* ============ S2 BRAND (8-18) ============ */
+sceneWindow("s2", 8, 10);
+tl.fromTo("#s2logo", { opacity: 0, scale: 0.3, rotation: -30 }, { opacity: 1, scale: 1, rotation: 0, duration: 1.2, ease: "back.out(1.6)" }, 8.3);
+tl.fromTo("#s2name", { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 1, ease: "power3.out" }, 9.2);
+tl.fromTo("#s2tag", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: .8, ease: "power2.out" }, 10.5);
+tl.fromTo("#s2p1", { opacity: 0, x: -30 }, { opacity: 1, x: 0, duration: .6, ease: "power2.out" }, 12.2);
+tl.fromTo("#s2p2", { opacity: 0, x: 30 }, { opacity: 1, x: 0, duration: .6, ease: "power2.out" }, 12.5);
+tl.to("#s2logo", { boxShadow: "0 60px 140px rgba(255,94,58,.7), 0 40px 80px rgba(255,174,0,.4)", duration: 1.5, ease: "sine.inOut", yoyo: true, repeat: 2 }, 10);
+
+/* ============ S3 MOBILE AUTH (18-38) ============ */
+sceneWindow("s3", 18, 20);
+const s3devices = gsap.utils.toArray("#s3 .device");
+tl.fromTo(s3devices[0], { opacity: 0, y: 60 }, { opacity: 1, y: 0, duration: .8, ease: "power3.out" }, 18.5);
+tl.fromTo(s3devices[1], { opacity: 0, y: 60 }, { opacity: 1, y: 0, duration: .8, ease: "power3.out" }, 19.2);
+tl.fromTo("#s3d3", { opacity: 0, y: 60, scale: .55 }, { opacity: 1, y: 0, scale: .66, duration: .8, ease: "power3.out", immediateRender: false }, 20.2);
+tl.fromTo("#s3c1", { opacity: 0, x: -30 }, { opacity: 1, x: 0, duration: .5, ease: "power2.out" }, 22);
+tl.fromTo("#s3c2", { opacity: 0, x: -30 }, { opacity: 1, x: 0, duration: .5, ease: "power2.out" }, 25);
+tl.fromTo("#s3c3", { opacity: 0, x: -30 }, { opacity: 1, x: 0, duration: .5, ease: "power2.out" }, 28);
+
+/* ============ S4 MOBILE HOME (38-52) ============ */
+sceneWindow("s4", 38, 14);
+tl.fromTo("#s4hello", { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: .5, ease: "power2.out" }, 38.6);
+tl.fromTo("#s4hero", { opacity: 0, y: 20, scale: .95 }, { opacity: 1, y: 0, scale: 1, duration: .8, ease: "back.out(1.4)" }, 39.2);
+tl.fromTo("#s4bar", { width: "0%" }, { width: "49.4%", duration: 1.2, ease: "power2.out" }, 40);
+tl.fromTo("#s4cred", { innerText: 0 }, { innerText: 247, duration: 1.4, snap: { innerText: 1 }, ease: "power1.out", onUpdate: function(){ document.querySelector('#s4cred').innerText = Math.round(this.targets()[0].innerText); } }, 40);
+["s4s1","s4s2","s4s3","s4s4"].forEach((id,i)=> tl.fromTo("#"+id, { opacity:0, y:16, scale:.9 }, { opacity:1, y:0, scale:1, duration:.5, ease:"power2.out" }, 41.4 + i*0.18));
+tl.fromTo("#s4cta", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: .6, ease: "power2.out" }, 43);
+
+/* ============ S5 GENERATE (52-76) · flagship ============ */
+sceneWindow("s5", 52, 24);
+// typing animation
+const prompt = "Launch-week thread for indie SaaS founders: how we grew from 0 to 1,000 users in 30 days. Bold tone, punchy hooks, one CTA at the end.";
+const typedEl = document.getElementById("s5typed");
+tl.to({}, { duration: 4.5, onUpdate: function(){ const p = this.progress(); typedEl.innerText = prompt.slice(0, Math.floor(prompt.length * p)); } }, 53.5);
+tl.fromTo("#s5caret", { opacity: 0 }, { opacity: 1, duration: .3, repeat: 12, yoyo: true }, 53);
+tl.to("#s5gen", { scale: 1.03, duration: .2, yoyo: true, repeat: 1, ease: "power2.inOut" }, 59);
+tl.fromTo("#s5out", { opacity: 0, x: 60, scale: .65 }, { opacity: 1, x: 0, scale: .7, duration: .8, ease: "power3.out" }, 60);
+tl.fromTo("#s5out .card", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: .5, stagger: .3, ease: "power2.out" }, 61);
+tl.fromTo("#s5c1", { opacity: 0, x: 30 }, { opacity: 1, x: 0, duration: .5 }, 64);
+tl.fromTo("#s5c2", { opacity: 0, x: 30 }, { opacity: 1, x: 0, duration: .5 }, 67);
+
+/* ============ S6 POST + CALENDAR (76-96) ============ */
+sceneWindow("s6", 76, 20);
+const s6devices = gsap.utils.toArray("#s6 .device");
+tl.fromTo(s6devices[0], { opacity: 0, x: -40 }, { opacity: 1, x: 0, duration: .8, ease: "power3.out" }, 76.5);
+tl.fromTo(s6devices[1], { opacity: 0, x: 40 }, { opacity: 1, x: 0, duration: .8, ease: "power3.out" }, 77.2);
+tl.fromTo("#s6sel", { scale: .8, opacity: .5 }, { scale: 1.05, opacity: 1, duration: .5, ease: "back.out(2)" }, 80);
+tl.fromTo("#s6day", { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: .5 }, 80.5);
+tl.fromTo("#s6c1", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: .5 }, 84);
+tl.fromTo("#s6c2", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: .5 }, 87);
+tl.fromTo("#s6c3", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: .5 }, 90);
+
+/* ============ S7 ANALYTICS (96-112) ============ */
+sceneWindow("s7", 96, 16);
+tl.fromTo("#s7 .device", { opacity: 0, scale: .95 }, { opacity: 1, scale: .72, duration: .8, ease: "power3.out" }, 96.5);
+tl.fromTo("#s7s1", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: .5 }, 97.5);
+tl.fromTo("#s7s2", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: .5 }, 97.8);
+// line chart draw
+tl.fromTo("#s7line", { attr: { d: "M0,90 L0,90" } }, { attr: { d: "M0,90 L30,72 L60,80 L90,55 L120,60 L150,40 L180,48 L210,25 L240,32 L270,15 L300,20" }, duration: 2, ease: "power2.inOut" }, 98.5);
+tl.fromTo("#s7area", { opacity: 0 }, { opacity: 1, duration: .5 }, 100.5);
+// platform bars
+const pfBars = gsap.utils.toArray(".pf-bar");
+pfBars.forEach((b,i)=> tl.to(b, { width: b.dataset.w, duration: .6, ease: "power2.out" }, 101 + i*0.15));
+tl.fromTo("#s7c1", { opacity: 0, x: 30 }, { opacity: 1, x: 0, duration: .5 }, 105);
+tl.fromTo("#s7c2", { opacity: 0, x: 30 }, { opacity: 1, x: 0, duration: .5 }, 107);
+
+/* ============ S8 SETTINGS SWEEP (112-132) ============ */
+sceneWindow("s8", 112, 20);
+const s8devices = gsap.utils.toArray("#s8 .device");
+tl.fromTo(s8devices[0], { opacity: 0, y: 40, scale: .5 }, { opacity: 1, y: 0, scale: .56, duration: .8, ease: "power3.out" }, 112.5);
+tl.fromTo("#s8d2", { opacity: 0, y: 40, scale: .5 }, { opacity: 1, y: 0, scale: .56, duration: .8, ease: "power3.out", immediateRender: false }, 116);
+tl.fromTo("#s8d3", { opacity: 0, y: 40, scale: .5 }, { opacity: 1, y: 0, scale: .56, duration: .8, ease: "power3.out", immediateRender: false }, 122);
+tl.to("#s8 .swatch:nth-child(2)", { boxShadow: "0 0 0 3px #00F5A0", borderColor: "#fff", duration: .3 }, 118.5);
+tl.to("#s8 .swatch:nth-child(2)", { boxShadow: "0 4px 12px rgba(0,0,0,.4)", borderColor: "transparent", duration: .3 }, 120);
+tl.to("#s8 .swatch:nth-child(3)", { boxShadow: "0 0 0 3px #FF2A85", borderColor: "#fff", duration: .3 }, 120.5);
+
+/* ============ S9 CONNECTED (132-146) ============ */
+sceneWindow("s9", 132, 14);
+tl.fromTo("#s9 .device", { opacity: 0, scale: .95 }, { opacity: 1, scale: .72, duration: .8 }, 132.5);
+tl.fromTo("#s9 .conn", { opacity: 0, x: -30 }, { opacity: 1, x: 0, duration: .4, stagger: .35, ease: "power2.out" }, 133.5);
+tl.fromTo("#s9c1", { opacity: 0, x: 30 }, { opacity: 1, x: 0, duration: .5 }, 138);
+tl.fromTo("#s9c2", { opacity: 0, x: 30 }, { opacity: 1, x: 0, duration: .5 }, 141);
+
+/* ============ S10 NOTES (146-160) ============ */
+sceneWindow("s10", 146, 14);
+const s10devices = gsap.utils.toArray("#s10 .device");
+tl.fromTo(s10devices[0], { opacity: 0, x: -40 }, { opacity: 1, x: 0, duration: .8, ease: "power3.out" }, 146.5);
+tl.fromTo("#s10 .note-card", { opacity: 0, y: 15 }, { opacity: 1, y: 0, duration: .4, stagger: .15 }, 147.5);
+tl.fromTo("#s10d2", { opacity: 0, x: 40 }, { opacity: 1, x: 0, duration: .8, ease: "power3.out" }, 150);
+
+/* ============ S11 HISTORY + STUDIO (160-176) ============ */
+sceneWindow("s11", 160, 16);
+const s11devices = gsap.utils.toArray("#s11 .device");
+tl.fromTo(s11devices[0], { opacity: 0, x: -30 }, { opacity: 1, x: 0, duration: .8, ease: "power3.out" }, 160.5);
+tl.fromTo("#s11 .hist-row", { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: .35, stagger: .12 }, 161.5);
+tl.fromTo("#s11d2", { opacity: 0, x: 30 }, { opacity: 1, x: 0, duration: .8, ease: "power3.out" }, 165);
+tl.fromTo("#s11 .studio-tile", { opacity: 0, scale: .85 }, { opacity: 1, scale: 1, duration: .35, stagger: .1, ease: "back.out(1.6)" }, 166);
+
+/* ============ S12 TEAM · Android (176-190) ============ */
+sceneWindow("s12", 176, 14);
+tl.fromTo("#s12 .device", { opacity: 0, y: 40, scale: .95 }, { opacity: 1, y: 0, scale: .68, duration: .8, ease: "power3.out" }, 176.5);
+tl.fromTo("#s12 .team-row", { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: .35, stagger: .18 }, 178);
+tl.fromTo("#s12c1", { opacity: 0, x: 30 }, { opacity: 1, x: 0, duration: .5 }, 183);
+tl.fromTo("#s12c2", { opacity: 0, x: 30 }, { opacity: 1, x: 0, duration: .5 }, 186);
+
+/* ============ S13 PAYWALL · Android (190-204) ============ */
+sceneWindow("s13", 190, 14);
+tl.fromTo("#s13 .device", { opacity: 0, y: 40, scale: .95 }, { opacity: 1, y: 0, scale: .68, duration: .8, ease: "power3.out" }, 190.5);
+tl.fromTo("#s13 .tier", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: .5, stagger: .3 }, 192);
+tl.fromTo("#s13 .tier.hot", { scale: 1 }, { scale: 1.04, duration: .5, yoyo: true, repeat: 3, ease: "power2.inOut" }, 195);
+tl.fromTo("#s13 .btn.primary", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: .5 }, 198);
+
+/* ============ S14 NOTIF + TEST (204-216) ============ */
+sceneWindow("s14", 204, 12);
+const s14devices = gsap.utils.toArray("#s14 .device");
+tl.fromTo(s14devices[0], { opacity: 0, x: -30 }, { opacity: 1, x: 0, duration: .7, ease: "power3.out" }, 204.5);
+tl.fromTo("#s14 .notif", { opacity: 0, y: 15 }, { opacity: 1, y: 0, duration: .35, stagger: .12 }, 205.2);
+tl.fromTo("#s14d2", { opacity: 0, x: 30 }, { opacity: 1, x: 0, duration: .7, ease: "power3.out" }, 208);
+tl.fromTo("#s14 .test-row", { opacity: 0, x: -15 }, { opacity: 1, x: 0, duration: .3, stagger: .18 }, 209);
+tl.fromTo("#s14 .test-banner", { opacity: 0, scale: .8 }, { opacity: 1, scale: 1, duration: .5, ease: "back.out(2)" }, 211.5);
+
+/* ============ S15 ADMIN LOGIN (216-228) ============ */
+sceneWindow("s15", 216, 12);
+tl.fromTo("#s15 .browser", { opacity: 0, y: 60, scale: .8 }, { opacity: 1, y: 0, scale: .85, duration: .9, ease: "power3.out" }, 216.5);
+tl.to("#s15btn", { boxShadow: "0 0 30px rgba(255,94,58,.6)", duration: .4, yoyo: true, repeat: 3, ease: "power2.inOut" }, 220);
+
+/* ============ S16 DASHBOARD (228-250) ============ */
+sceneWindow("s16", 228, 22);
+tl.fromTo("#s16 .browser", { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: .8 }, 228.5);
+tl.fromTo("#s16 .kpi", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: .5, stagger: .2 }, 229.8);
+// counters
+const kpiNums = gsap.utils.toArray("#s16 .kpi .num");
+kpiNums.forEach(el => { const raw = el.dataset.count; const target = parseFloat(raw.replace(/[^\d.]/g,"")); const prefix = raw.match(/^[^\d]*/)[0]; const suffix = raw.match(/[^\d.]*$/)[0]; const obj = { v: 0 }; tl.to(obj, { v: target, duration: 1.4, ease: "power2.out", onUpdate: () => { const val = obj.v; const formatted = target >= 1000 ? Math.round(val).toLocaleString() : (target < 100 && raw.includes(".")) ? val.toFixed(1) : Math.round(val); el.innerText = prefix + formatted + suffix; } }, 231); });
+// line chart
+tl.fromTo("#s16line", { attr: { d: "M0,180 L0,180" } }, { attr: { d: "M0,140 L50,130 L100,120 L150,100 L200,110 L250,80 L300,90 L350,60 L400,70 L450,40 L500,30" }, duration: 2.4, ease: "power2.out" }, 233);
+tl.fromTo("#s16area", { opacity: 0 }, { opacity: 1, duration: .6 }, 235);
+// donut
+tl.to("#s16d1", { attr: { "stroke-dasharray": "38 62" }, duration: .8, ease: "power2.out" }, 236);
+tl.to("#s16d2", { attr: { "stroke-dasharray": "31 69" }, duration: .8, ease: "power2.out" }, 236.4);
+tl.to("#s16d3", { attr: { "stroke-dasharray": "19 81" }, duration: .8, ease: "power2.out" }, 236.8);
+tl.to("#s16d4", { attr: { "stroke-dasharray": "12 88" }, duration: .8, ease: "power2.out" }, 237.2);
+
+/* ============ S17 USERS (250-270) ============ */
+sceneWindow("s17", 250, 20);
+tl.fromTo("#s17 .browser", { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: .8 }, 250.5);
+tl.fromTo("#s17 tbody tr", { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: .4, stagger: .25 }, 252);
+tl.to("#s17r5", { outline: "2px solid #FF5E3A", outlineOffset: -2, duration: .3 }, 258);
+tl.fromTo("#s17modal", { opacity: 0, scale: .9 }, { opacity: 1, scale: 1, duration: .5, ease: "back.out(1.6)" }, 259);
+tl.to("#s17modal", { opacity: 0, duration: .4 }, 266);
+
+/* ============ S18 TEMPLATES (270-288) ============ */
+sceneWindow("s18", 270, 18);
+tl.fromTo("#s18 .browser", { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: .8 }, 270.5);
+tl.fromTo("#s18 .tpl", { opacity: 0, scale: .9, y: 20 }, { opacity: 1, scale: 1, y: 0, duration: .4, stagger: .15, ease: "back.out(1.4)" }, 272);
+tl.fromTo("#s18 tbody tr", { opacity: 0, x: -15 }, { opacity: 1, x: 0, duration: .4, stagger: .2 }, 278);
+
+/* ============ S19 ADMIN ANALYTICS (288-304) ============ */
+sceneWindow("s19", 288, 16);
+tl.fromTo("#s19 .browser", { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: .8 }, 288.5);
+const s19bars = gsap.utils.toArray("#s19 .bar"); s19bars.forEach(b => tl.fromTo(b, { height: 0 }, { height: b.dataset.h, duration: .8, ease: "power2.out" }, 290));
+const s19shares = gsap.utils.toArray("#s19 .share-bar"); s19shares.forEach(b => tl.to(b, { width: b.dataset.w, duration: .6, ease: "power2.out" }, 293));
+tl.fromTo("#s19 tbody tr", { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: .35, stagger: .15 }, 296);
+
+/* ============ S20 WHITE LABEL (304-324) ============ */
+sceneWindow("s20", 304, 20);
+tl.fromTo("#s20 .browser", { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: .8 }, 304.5);
+tl.fromTo("#s20 .admin-main > div > div", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: .6, stagger: .3 }, 306);
+tl.to("#s20 .wl-sw:nth-child(2)", { boxShadow: "0 0 0 3px #fff", duration: .3, yoyo: true, repeat: 1 }, 310);
+tl.to("#s20 .wl-sw:nth-child(3)", { boxShadow: "0 0 0 3px #fff", duration: .3, yoyo: true, repeat: 1 }, 312);
+tl.to("#s20 .feat-toggle:nth-child(3) .toggle", { opacity: .4, duration: .3, yoyo: true, repeat: 1 }, 315);
+
+/* ============ S21 ADMIN MISC (324-336) ============ */
+sceneWindow("s21", 324, 12);
+tl.fromTo("#s21 .admin-tile", { opacity: 0, y: 40, scale: .95 }, { opacity: 1, y: 0, scale: 1, duration: .6, stagger: .3, ease: "power3.out" }, 324.5);
+tl.fromTo("#s21 .at-row", { opacity: 0, x: -15 }, { opacity: 1, x: 0, duration: .3, stagger: .08 }, 326);
+
+/* ============ S22 PLATFORM LINEUP (336-348) ============ */
+sceneWindow("s22", 336, 12);
+tl.fromTo("#s22 .caption", { opacity: 0, y: -20 }, { opacity: 1, y: 0, duration: .6 }, 336.5);
+tl.fromTo("#s22d1", { opacity: 0, y: 80, rotation: -8 }, { opacity: 1, y: 0, rotation: 0, duration: .9, ease: "back.out(1.4)" }, 337.5);
+tl.fromTo("#s22d2", { opacity: 0, y: 100, scale: .4 }, { opacity: 1, y: 0, scale: .5, duration: .9, ease: "back.out(1.4)" }, 338.5);
+tl.fromTo("#s22d3", { opacity: 0, y: 60, scale: .4 }, { opacity: 1, y: 0, scale: .5, duration: .9, ease: "back.out(1.4)" }, 339.5);
+tl.fromTo("#s22tag", { opacity: 0, y: 10 }, { opacity: .8, y: 0, duration: 1, ease: "power2.out" }, 341);
+
+/* ============ S23 BADGES RECAP (348-362) ============ */
+sceneWindow("s23", 348, 14);
+tl.fromTo("#s23 .caption", { opacity: 0, y: -20 }, { opacity: 1, y: 0, duration: .6 }, 348.5);
+const s23chips = gsap.utils.toArray("#s23 .chip"); s23chips.forEach((c, i) => tl.fromTo(c, { opacity: 0, scale: .5, y: 30 }, { opacity: 1, scale: 1, y: 0, duration: .45, ease: "back.out(1.8)" }, 349.2 + i*0.22));
+
+/* ============ S24 CONTACT FINALE (362-382) ============ */
+tl.fromTo("#s24", { opacity: 0 }, { opacity: 1, duration: .6 }, 362);
+tl.fromTo("#s24 .contact-card", { opacity: 0, y: 40, scale: .95 }, { opacity: 1, y: 0, scale: 1, duration: .9, ease: "power3.out" }, 362.3);
+tl.fromTo("#s24by", { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: .5 }, 363.2);
+tl.fromTo("#s24name", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: .6, ease: "power3.out" }, 363.8);
+tl.fromTo("#s24handle", { opacity: 0, scale: .5 }, { opacity: 1, scale: 1, duration: .7, ease: "back.out(2)" }, 364.5);
+tl.to("#s24handle", { boxShadow: "0 0 40px rgba(255,174,0,.8)", duration: .6, yoyo: true, repeat: 3, ease: "sine.inOut" }, 366);
+tl.fromTo("#s24roles", { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: .5 }, 366);
+tl.fromTo("#s24 .divider", { scaleX: 0 }, { scaleX: 1, duration: .8, ease: "power2.inOut", transformOrigin: "center" }, 367);
+tl.fromTo("#s24r1", { opacity: 0, x: -30 }, { opacity: 1, x: 0, duration: .5, ease: "power3.out" }, 368.5);
+tl.fromTo("#s24r2", { opacity: 0, x: -30 }, { opacity: 1, x: 0, duration: .5, ease: "power3.out" }, 372.5);
+tl.fromTo("#s24r3", { opacity: 0, x: -30 }, { opacity: 1, x: 0, duration: .5, ease: "power3.out" }, 376);
+tl.fromTo("#s24r4", { opacity: 0, x: -30 }, { opacity: 1, x: 0, duration: .5, ease: "power3.out" }, 378);
+tl.fromTo("#s24cta", { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: .6 }, 375);
+tl.fromTo("#s24foot", { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: .6 }, 376.5);
+tl.fromTo("#s24brand", { opacity: 0 }, { opacity: 1, duration: .8 }, 378.5);
+tl.to("#s24", { opacity: 0, duration: .5 }, 381.5);
+
+tl.seek(0);
+</script>
+</body>
+</html>
