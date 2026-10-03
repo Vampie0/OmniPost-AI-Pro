@@ -12,6 +12,7 @@
     "lint": "turbo run lint",
     "clean": "turbo run clean",
     "admin": "npx next dev apps/admin -p 3001",
+    "brand:generate": "node scripts/generate-brand-assets.mjs",
     "postinstall": "node scripts/dedupe-react.cjs"
   },
   "devDependencies": {

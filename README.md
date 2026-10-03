@@ -65,6 +65,7 @@ supabase secrets set SUPABASE_SERVICE_ROLE_KEY=<your service role key>
 | `pnpm admin` | Next dev server on port 3001 |
 | `cd apps/mobile && npx tsc --noEmit` | Mobile typecheck (its `lint` script) |
 | `cd apps/mobile && npx expo export -p web` | Static web build into `apps/mobile/dist` |
+| `pnpm brand:generate` | Re-render every icon, splash logo, favicon and social card from one vector mark |
 
 `postinstall` runs `scripts/dedupe-react.cjs`. **Do not skip it** — the admin pins React 19 while Expo pulls its own copy, and without de-duplication Next fails to build with duplicate-React errors.
 
@@ -78,6 +79,22 @@ Five palettes — `sunset`, `emerald`, `violet`, `azure`, `stealth` — each wit
 - A palette must survive a reload: the admin persists the choice with zustand, and `useTheme.ts` recomputes the derived `colors`/`isDark` in the persist `merge`, otherwise rehydration restores only the palette name and the UI silently stays on sunset.
 
 Selected and active states use the palette **gradient**, not a flat accent — `GradientFrame` renders a real gradient border, which React Native cannot do with `borderColor`.
+
+## Brand assets
+
+`scripts/generate-brand-assets.mjs` is the single source for the icon: one vector mark (an orbit that passes behind and in front of a lit sphere) rasterised to all 28 outputs — Expo source images, every Android density for `mipmap`/`drawable`, the admin favicon set and the 1200×630 social card. Edit the mark there, never the PNGs.
+
+```bash
+pnpm brand:generate
+# rebrand for a white-label buyer without touching the script:
+node scripts/generate-brand-assets.mjs --grad "#00F5A0,#00D2FF,#059669" --ring "#FF5E3A,#FFAE00" --bg "#040605"
+```
+
+Two constraints the script encodes, because both fail silently at store review rather than at build:
+- `icon.png` and `apple-touch-icon.png` are written **without an alpha plane** — the App Store rejects an icon that carries one even when every pixel is opaque.
+- The adaptive-icon foreground keeps its artwork inside the 66/108 dp safe zone, since launchers crop the outer ring to a circle or squircle.
+
+Launcher icons cannot animate on iOS or Android, so the motion lives in the launch handoff instead: `app.config.ts` sets the native splash to `splash-icon.png` on `#06070B`, which is the sunset palette's `background` token, and `AnimatedSplashScreen` then brings that same mark alive as the orrery in `CosmicSocialLoader`. Changing the palette means regenerating these assets — the native splash colour is baked at build time and will not follow a runtime palette switch.
 
 ## Deployment
 

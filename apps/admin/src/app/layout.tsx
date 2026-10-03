@@ -7,8 +7,19 @@ import { AdminQueryProvider } from '@/components/providers/AdminQueryProvider';
 import { GRADIENT_VARS, VAR_TO_COLOR_KEY } from '@/theme/themeVars';
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://socialpilot-admin.vercel.app'),
   title: 'SocialPilot AI Pro — Admin Control Center',
   description: 'White-Label & AI Configuration Master Dashboard',
+  icons: {
+    icon: ['/favicon.svg?v=1', { url: '/icon-192.png', type: 'image/png' }],
+    apple: '/apple-touch-icon.png',
+  },
+  openGraph: {
+    title: 'SocialPilot AI Pro — Admin Control Center',
+    description: 'White-Label & AI Configuration Master Dashboard',
+    images: [{ url: '/og-image.png', width: 1200, height: 630, alt: 'SocialPilot AI Pro' }],
+    type: 'website',
+  },
 };
 
 /**

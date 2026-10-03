@@ -10,8 +10,13 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     icon: './src/assets/images/icon.png',
     scheme: 'socialpilot',
     userInterfaceStyle: 'automatic',
+    // #06070B is the sunset palette's `background` token — matching it here means
+    // the native splash and the JS AnimatedSplashScreen are the same colour, so the
+    // handoff shows no step. Regenerate rasters after changing palettes:
+    // node scripts/generate-brand-assets.mjs
     splash: {
-      backgroundColor: '#07080B',
+      image: './src/assets/images/splash-icon.png',
+      backgroundColor: '#06070B',
       resizeMode: 'contain'
     },
     ios: {
@@ -21,7 +26,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     android: {
       adaptiveIcon: {
         foregroundImage: './src/assets/images/adaptive-icon.png',
-        backgroundColor: '#07080B'
+        backgroundColor: '#06070B'
       },
       package: 'com.socialpilot.aipro'
     },

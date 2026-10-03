@@ -14,5 +14,9 @@ apps/mobile/.expo
 .qoder
 .kilo
 *.docx
-*.png
 PROJECT_EXPORT_MASTER.txt
+
+# No blanket *.png here on purpose: apps/admin/public holds the real brand assets
+# (favicon set, apple-touch-icon, og-image) and Vercel matches patterns at any
+# depth, so ignoring PNGs silently ships a dashboard with no icon or social card.
+# Unwanted images are excluded by directory above instead.
