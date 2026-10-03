@@ -76,11 +76,11 @@ for (const target of RUNTIME_TARGETS) {
 }
 
 // ─── Fix @types/react version mismatch ──────────────────────────────────────
-// Some monorepo deps pull @types/react@19 while Next.js 14 + React 18 need v18.
-// Strategy: find the correct 18.x copy, ensure it's at root.
+// Some monorepo deps pull @types/react@18 while Next 15 + React 19 need v19.
+// Strategy: find the correct 19.x copy, ensure it's at root.
 
 const TYPES_TARGETS = ['@types/react', '@types/react-dom'];
-const REQUIRED_MAJOR = '18';
+const REQUIRED_MAJOR = '19';
 
 for (const target of TYPES_TARGETS) {
   const rootDir = path.join(NM, target);

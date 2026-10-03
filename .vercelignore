@@ -1,0 +1,18 @@
+# Vercel deployment ignore (admin app only deployment)
+node_modules
+.git
+.expo
+.turbo
+.cache
+.pnpm-store
+.vercel-tmp
+apps/mobile/android
+apps/mobile/ios
+apps/mobile/assets
+apps/mobile/src/assets
+apps/mobile/.expo
+.qoder
+.kilo
+*.docx
+*.png
+PROJECT_EXPORT_MASTER.txt
